@@ -1,0 +1,13 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Cache-bust nothing by default; the dashboard is meant to be re-uploaded
+# each week, so keep caching minimal.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache"

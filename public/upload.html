@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submit a File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-deep:#0b1e33;
+  --navy:#14304f;
+  --navy-light:#1e3f63;
+  --gold:#d4a24c;
+  --gold-bright:#f0c869;
+  --cream:#f3ecdd;
+  --line: rgba(212,162,76,0.28);
+  --err:#e0665a;
+  --ok:#7fbf7f;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background: var(--navy-deep);
+  color: var(--cream);
+  font-family:'Barlow', sans-serif;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.card{
+  width:100%;
+  max-width:560px;
+  background: var(--navy);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:36px 32px;
+}
+h1{
+  font-family:'Anton', sans-serif;
+  font-size:28px;
+  letter-spacing:0.02em;
+  color: var(--gold-bright);
+  margin:0 0 6px;
+}
+.sub{
+  font-size:14.5px;
+  color: rgba(243,236,221,0.6);
+  margin:0 0 28px;
+  line-height:1.5;
+}
+label{
+  display:block;
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:13px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color: rgba(243,236,221,0.7);
+  margin-bottom:6px;
+}
+input[type=text]{
+  width:100%;
+  padding:11px 13px;
+  margin-bottom:20px;
+  border-radius:5px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--cream);
+  font-family:'Barlow', sans-serif;
+  font-size:14.5px;
+}
+input[type=text]:focus{outline:none; border-color:var(--gold);}
+.file-drop{
+  border:2px dashed var(--line);
+  border-radius:6px;
+  padding:28px 16px;
+  text-align:center;
+  margin-bottom:20px;
+  cursor:pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.file-drop:hover, .file-drop.dragover{
+  border-color: var(--gold);
+  background: rgba(212,162,76,0.06);
+}
+.file-drop input[type=file]{display:none;}
+.file-drop .hint{
+  font-size:13.5px;
+  color: rgba(243,236,221,0.5);
+  margin-top:4px;
+}
+.file-name{
+  font-weight:600;
+  color: var(--gold-bright);
+  word-break:break-all;
+}
+button{
+  width:100%;
+  padding:13px;
+  border:none;
+  border-radius:5px;
+  background: var(--gold);
+  color: var(--navy-deep);
+  font-family:'Barlow Condensed', sans-serif;
+  font-weight:700;
+  font-size:15px;
+  letter-spacing:0.03em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+button:hover:not(:disabled){background: var(--gold-bright);}
+button:disabled{opacity:0.5; cursor:not-allowed;}
+.progress-wrap{
+  margin-top:20px;
+  display:none;
+}
+.progress-track{
+  height:8px;
+  border-radius:4px;
+  background: rgba(255,255,255,0.08);
+  overflow:hidden;
+}
+.progress-fill{
+  height:100%;
+  width:0%;
+  background: var(--gold);
+  transition: width 0.15s;
+}
+.progress-label{
+  font-size:13px;
+  color: rgba(243,236,221,0.6);
+  margin-top:6px;
+  text-align:center;
+}
+.status-msg{
+  margin-top:18px;
+  padding:12px 14px;
+  border-radius:5px;
+  font-size:14px;
+  display:none;
+}
+.status-msg.ok{display:block; background: rgba(127,191,127,0.12); color: var(--ok); border:1px solid rgba(127,191,127,0.3);}
+.status-msg.err{display:block; background: rgba(224,102,90,0.12); color: var(--err); border:1px solid rgba(224,102,90,0.3);}
+.footer-note{
+  margin-top:22px;
+  font-size:12.5px;
+  color: rgba(243,236,221,0.4);
+  text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>SUBMIT A FILE</h1>
+  <p class="sub">Upload your file below. Large files are fine (up to 1GB).</p>
+
+  <form id="uploadForm">
+    <label for="senderName">Your name</label>
+    <input type="text" id="senderName" placeholder="e.g. Jane Smith" required>
+
+    <label>File</label>
+    <div class="file-drop" id="fileDrop">
+      <div id="fileDropLabel">
+        Click to choose a file, or drag one here
+        <div class="hint">Up to 1GB</div>
+      </div>
+      <input type="file" id="fileInput">
+    </div>
+
+    <button type="submit" id="submitBtn">Upload</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0%</div>
+    </div>
+
+    <div class="status-msg" id="statusMsg"></div>
+  </form>
+
+  <div class="footer-note">Files are sent directly to secure storage — no size limit imposed by this page itself.</div>
+</div>
+
+<script>
+(function(){
+  const MAX_BYTES = 1024 * 1024 * 1024; // 1GB soft warning threshold
+
+  const form = document.getElementById('uploadForm');
+  const fileDrop = document.getElementById('fileDrop');
+  const fileInput = document.getElementById('fileInput');
+  const fileDropLabel = document.getElementById('fileDropLabel');
+  const senderName = document.getElementById('senderName');
+  const submitBtn = document.getElementById('submitBtn');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const statusMsg = document.getElementById('statusMsg');
+
+  let selectedFile = null;
+
+  function showFile(file){
+    selectedFile = file;
+    const mb = (file.size / (1024*1024)).toFixed(1);
+    fileDropLabel.innerHTML = '<span class="file-name">' + file.name + '</span><div class="hint">' + mb + ' MB</div>';
+  }
+
+  fileDrop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    if(e.target.files && e.target.files[0]) showFile(e.target.files[0]);
+  });
+
+  ['dragenter','dragover'].forEach(evt => {
+    fileDrop.addEventListener(evt, (e) => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    fileDrop.addEventListener(evt, (e) => { e.preventDefault(); fileDrop.classList.remove('dragover'); });
+  });
+  fileDrop.addEventListener('drop', (e) => {
+    if(e.dataTransfer.files && e.dataTransfer.files[0]){
+      fileInput.files = e.dataTransfer.files;
+      showFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  function setStatus(kind, text){
+    statusMsg.className = 'status-msg ' + kind;
+    statusMsg.textContent = text;
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    statusMsg.className = 'status-msg';
+    statusMsg.textContent = '';
+
+    if(!selectedFile){
+      setStatus('err', 'Please choose a file first.');
+      return;
+    }
+    if(selectedFile.size > MAX_BYTES){
+      setStatus('err', 'That file is over 1GB — please contact the commissioner directly for very large files.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Preparing…';
+
+    fetch('/.netlify/functions/generate-upload-url', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        filename: selectedFile.name,
+        contentType: selectedFile.type,
+        senderName: senderName.value
+      })
+    })
+    .then(resp => {
+      if(!resp.ok) return resp.text().then(t => { throw new Error(t || 'Server error'); });
+      return resp.json();
+    })
+    .then(({uploadUrl}) => {
+      submitBtn.textContent = 'Uploading…';
+      progressWrap.style.display = 'block';
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', selectedFile.type || 'application/octet-stream');
+
+      xhr.upload.addEventListener('progress', (evt) => {
+        if(evt.lengthComputable){
+          const pct = Math.round((evt.loaded / evt.total) * 100);
+          progressFill.style.width = pct + '%';
+          progressLabel.textContent = pct + '%';
+        }
+      });
+
+      xhr.onload = function(){
+        if(xhr.status >= 200 && xhr.status < 300){
+          progressFill.style.width = '100%';
+          progressLabel.textContent = '100%';
+          setStatus('ok', 'Uploaded successfully — thanks, ' + (senderName.value || 'friend') + '!');
+          submitBtn.textContent = 'Upload';
+          submitBtn.disabled = false;
+          form.reset();
+          selectedFile = null;
+          fileDropLabel.innerHTML = 'Click to choose a file, or drag one here<div class="hint">Up to 1GB</div>';
+        } else {
+          setStatus('err', 'Upload failed (server said: ' + xhr.status + '). Please try again.');
+          submitBtn.textContent = 'Upload';
+          submitBtn.disabled = false;
+        }
+      };
+      xhr.onerror = function(){
+        setStatus('err', 'Upload failed — check your connection and try again.');
+        submitBtn.textContent = 'Upload';
+        submitBtn.disabled = false;
+      };
+      xhr.send(selectedFile);
+    })
+    .catch(err => {
+      setStatus('err', 'Could not start the upload: ' + err.message);
+      submitBtn.textContent = 'Upload';
+      submitBtn.disabled = false;
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "rikki-hornett-pool-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Rikki Hornett NFL Owner's Pool -- dashboard + file upload page",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
+    "@aws-sdk/s3-request-presigner": "^3.658.0"
+  }
+}
