@@ -37,6 +37,9 @@ exports.handler = async (event) => {
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
   const bucketName = process.env.R2_BUCKET_NAME;
+  // Optional override -- required for jurisdiction-restricted buckets (e.g. EU),
+  // which need their region-specific endpoint rather than the global default.
+  const endpoint = process.env.R2_ENDPOINT || `https://${accountId}.r2.cloudflarestorage.com`;
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
     return {
@@ -47,8 +50,9 @@ exports.handler = async (event) => {
 
   const s3 = new S3Client({
     region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    endpoint: endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    forcePathStyle: true, // R2 expects account.r2.cloudflarestorage.com/bucket, not bucket.account.r2.cloudflarestorage.com
   });
 
   // Build a safe, collision-resistant object key so two people uploading
