@@ -1431,15 +1431,45 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // browser's localStorage, the same way live edits do; a downloaded weekly
   // snapshot also carries the history forward via DATA.baked_history so the
   // trend keeps building across copies sent out to the group.
+  // Roughly one checkpoint per week, not one per sync -- NFL games finish across
+  // several different days within a single week, and results occasionally arrive
+  // late (ESPN's own feed has lagged on individual games before), so relying on
+  // "games played increased" alone can fire more than once in the same week.
+  const MIN_CHECKPOINT_GAP_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+  // Self-healing cleanup: collapse any checkpoints that ended up closer together
+  // than the minimum gap (e.g. from before this rule existed) into a single
+  // entry -- keeping the later one, since it reflects more complete game data.
+  // The synthetic zero-point (date: null) is never touched.
+  function pruneCloseCheckpoints(history){
+    if(history.length < 2) return history;
+    const pruned = [history[0]];
+    for(let i = 1; i < history.length; i++){
+      const prev = pruned[pruned.length - 1];
+      const cur = history[i];
+      if(prev.date && cur.date && (new Date(cur.date).getTime() - new Date(prev.date).getTime()) < MIN_CHECKPOINT_GAP_MS){
+        pruned[pruned.length - 1] = cur; // too close together -- replace with the later, more complete entry
+      } else {
+        pruned.push(cur);
+      }
+    }
+    return pruned;
+  }
+
   function loadHistory(){
+    let history = null;
     try {
       const raw = localStorage.getItem(HISTORY_KEY);
       if(raw){
         const parsed = JSON.parse(raw);
-        if(Array.isArray(parsed) && parsed.length) return parsed;
+        if(Array.isArray(parsed) && parsed.length) history = parsed;
       }
     } catch(e){}
-    return Array.isArray(DATA.baked_history) ? DATA.baked_history.slice() : [];
+    if(!history) history = Array.isArray(DATA.baked_history) ? DATA.baked_history.slice() : [];
+
+    const cleaned = pruneCloseCheckpoints(history);
+    if(cleaned.length !== history.length) saveHistory(cleaned); // persist the fix so it self-heals permanently
+    return cleaned;
   }
 
   function saveHistory(history){
@@ -1451,12 +1481,6 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   function totalGamesPlayed(stats){
     return teamNames.reduce((s,t) => s + (stats[t].wins||0) + (stats[t].losses||0), 0);
   }
-
-  // Roughly one checkpoint per week, not one per sync -- NFL games finish across
-  // several different days within a single week, and results occasionally arrive
-  // late (ESPN's own feed has lagged on individual games before), so relying on
-  // "games played increased" alone can fire more than once in the same week.
-  const MIN_CHECKPOINT_GAP_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
   function maybeRecordHistoryCheckpoint(stats, ownerScores){
     const games = totalGamesPlayed(stats);
