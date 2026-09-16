@@ -932,6 +932,7 @@ footer{
         <div class="note">Top 5 owners' scores over time &mdash; builds automatically, nothing to save</div>
       </div>
       <div id="scoreHistoryChart"></div>
+      <button class="owner-toggle-btn" id="resetHistoryBtn" style="margin-top:14px;">Reset History</button>
     </section>
 
     <section id="best-possible-section">
@@ -1451,10 +1452,29 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     return teamNames.reduce((s,t) => s + (stats[t].wins||0) + (stats[t].losses||0), 0);
   }
 
+  // Roughly one checkpoint per week, not one per sync -- NFL games finish across
+  // several different days within a single week, and results occasionally arrive
+  // late (ESPN's own feed has lagged on individual games before), so relying on
+  // "games played increased" alone can fire more than once in the same week.
+  const MIN_CHECKPOINT_GAP_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
   function maybeRecordHistoryCheckpoint(stats, ownerScores){
     const games = totalGamesPlayed(stats);
     const last = scoreHistory.length ? scoreHistory[scoreHistory.length-1] : null;
-    if(last && last.games >= games) return; // no new results since last checkpoint
+
+    if(!last){
+      // Seed the season's true starting point -- everyone at zero -- so the
+      // chart shows a real climb from kickoff rather than appearing to start
+      // mid-flight at whatever the first recorded checkpoint happened to be.
+      const zeroScores = {};
+      ownerScores.forEach(o => { zeroScores[o.id] = 0; });
+      scoreHistory.push({ games: 0, date: null, label: 'Season start', scores: zeroScores });
+    } else {
+      if(last.games >= games) return; // no new results since last checkpoint
+      const lastTime = last.date ? new Date(last.date).getTime() : 0;
+      if(Date.now() - lastTime < MIN_CHECKPOINT_GAP_MS) return; // too soon since last checkpoint
+    }
+
     const scores = {};
     ownerScores.forEach(o => { scores[o.id] = o.total; });
     scoreHistory.push({
@@ -1463,6 +1483,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       label: liveState.asOf || DATA.standings_as_of,
       scores: scores
     });
+    saveHistory(scoreHistory);
+  }
+
+  function resetScoreHistory(){
+    scoreHistory = [];
     saveHistory(scoreHistory);
   }
 
@@ -1843,8 +1868,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     }
     const tickIdxs = n <= 6 ? scoreHistory.map((_,i) => i) : [0, Math.floor((n-1)/2), n-1];
     tickIdxs.forEach(i => {
-      const d = new Date(scoreHistory[i].date);
-      const lbl = isNaN(d) ? ('#' + (i+1)) : (d.getMonth()+1) + '/' + d.getDate();
+      let lbl;
+      if(!scoreHistory[i].date){
+        lbl = 'Start';
+      } else {
+        const d = new Date(scoreHistory[i].date);
+        lbl = isNaN(d) ? ('#' + (i+1)) : (d.getMonth()+1) + '/' + d.getDate();
+      }
       svg += `<text x="${xScale(i)}" y="${h-8}" text-anchor="middle" font-size="10" fill="rgba(243,236,221,0.4)">${lbl}</text>`;
     });
 
@@ -1933,6 +1963,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     if(!confirm('Reset all standings to the built-in snapshot? This clears any manual edits and playoff results.')) return;
     liveState = {stats: defaultStats(), asOf: DATA.standings_as_of, synced:false};
     saveStats(liveState);
+    renderLiveScoreboard();
+  });
+
+  document.getElementById('resetHistoryBtn').addEventListener('click', () => {
+    if(!confirm('Clear the recorded score history and start fresh from today?')) return;
+    resetScoreHistory();
     renderLiveScoreboard();
   });
 
