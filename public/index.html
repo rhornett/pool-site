@@ -133,6 +133,29 @@ body{
 .tab-btn:hover{color: var(--cream);}
 .tab-btn.active{color: var(--gold-bright); border-bottom-color: var(--gold);}
 
+/* ---------- JUMP NAV ---------- */
+html{scroll-behavior:smooth;}
+.jump-nav{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  padding:16px 0;
+  margin-bottom:8px;
+}
+.jump-nav a{
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:13.5px;
+  letter-spacing:0.03em;
+  color: rgba(243,236,221,0.55);
+  text-decoration:none;
+  padding:4px 0;
+  margin-right:18px;
+  border-bottom:1px solid transparent;
+  transition: color .15s ease, border-color .15s ease;
+}
+.jump-nav a:hover{color: var(--gold-bright); border-bottom-color: var(--gold);}
+section[id]{scroll-margin-top:20px;}
+
 /* ---------- LIVE SCOREBOARD ---------- */
 .live-toolbar{
   display:flex;
@@ -228,6 +251,17 @@ body{
 .owner-detail-chip b{color:var(--gold-bright);}
 .owner-detail-chip .chip-abbr{color:var(--gold-bright); margin-right:2px;}
 .owner-detail-chip .chip-price{color:rgba(243,236,221,0.4); margin-left:2px;}
+.chip-shared-tag{
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:0.06em;
+  color: var(--navy-deep);
+  background: var(--gold);
+  border-radius:3px;
+  padding:1px 5px;
+  margin-left:4px;
+  vertical-align:middle;
+}
 .best-score-toolbar{
   display:flex;
   align-items:center;
@@ -392,6 +426,22 @@ body{
   border-radius:6px;
   overflow:hidden;
 }
+.owner-toggle-btn{
+  display:block;
+  width:100%;
+  margin-top:10px;
+  padding:12px;
+  background: rgba(255,255,255,0.03);
+  border:1px solid var(--line);
+  border-radius:6px;
+  color: var(--gold-bright);
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:14px;
+  letter-spacing:0.04em;
+  cursor:pointer;
+  transition: background .15s ease;
+}
+.owner-toggle-btn:hover{background: rgba(255,255,255,0.06);}
 
 .team-score-row{
   display:flex;
@@ -781,10 +831,18 @@ footer{
 
   <nav class="tab-nav" id="tabNav">
     <button class="tab-btn active" data-tab="live">Live Scoreboard</button>
+    <button class="tab-btn" data-tab="insights">Insights</button>
     <button class="tab-btn" data-tab="overview">Pool Overview</button>
   </nav>
 
   <div class="tab-pane" id="tab-live">
+
+    <div class="jump-nav">
+      <a href="#live-status-section">Sync &amp; Standings</a>
+      <a href="#scoring-key-section">Scoring</a>
+      <a href="#owner-leaderboard-section">Leaderboard</a>
+      <a href="#team-scores-section">Team Scores</a>
+    </div>
 
     <section id="live-status-section">
       <div class="sec-head">
@@ -819,6 +877,25 @@ footer{
       </div>
       <div id="ownerLeaderboard"></div>
     </section>
+
+    <section id="team-scores-section">
+      <div class="sec-head">
+        <h2>Team Scores</h2>
+        <div class="note">Every team's live point total</div>
+      </div>
+      <div id="teamScoresBoard"></div>
+    </section>
+
+  </div><!-- /tab-live -->
+
+  <div class="tab-pane" id="tab-insights" style="display:none;">
+
+    <div class="jump-nav">
+      <a href="#payout-section">Payout</a>
+      <a href="#h2h-section">Head-to-Head</a>
+      <a href="#score-history-section">Score History</a>
+      <a href="#best-possible-section">Best Possible Score</a>
+    </div>
 
     <section id="payout-section">
       <div class="sec-head">
@@ -864,15 +941,7 @@ footer{
       <div id="bestPossibleBoard" class="best-possible-board"></div>
     </section>
 
-    <section id="team-scores-section">
-      <div class="sec-head">
-        <h2>Team Scores</h2>
-        <div class="note">Every team's live point total</div>
-      </div>
-      <div id="teamScoresBoard"></div>
-    </section>
-
-  </div><!-- /tab-live -->
+  </div><!-- /tab-insights -->
 
   <div class="tab-pane" id="tab-overview" style="display:none;">
 
@@ -1596,6 +1665,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
   let lastOwnerScores = [];
   let ownerSearchTerm = '';
+  let ownerShowAll = false;
+  const OWNER_DEFAULT_LIMIT = 20;
 
   function renderOwnerLeaderboardList(term){
     ownerSearchTerm = term || '';
@@ -1608,7 +1679,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       ownerLeaderboard.innerHTML = '<div class="empty-state">No owners match that search.</div>';
       return;
     }
-    ownerLeaderboard.innerHTML = `<div class="owner-list-wrap">${filtered.map((o) => {
+    // A search implies looking for someone specific -- always show every match.
+    // With no search, keep the initial view short; a button reveals everyone.
+    const isTruncated = !t && !ownerShowAll && filtered.length > OWNER_DEFAULT_LIMIT;
+    const visible = isTruncated ? filtered.slice(0, OWNER_DEFAULT_LIMIT) : filtered;
+
+    const cardsHtml = visible.map((o) => {
       const sortedBreakdown = o.breakdown.slice().sort((a,b)=>b.score-a.score);
       return `
         <div class="owner-card">
@@ -1628,7 +1704,24 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           }).join('')}
         </div>
       `;
-    }).join('')}</div>`;
+    }).join('');
+
+    let toggleHtml = '';
+    if(isTruncated){
+      toggleHtml = `<button class="owner-toggle-btn" id="ownerShowAllBtn">Show all ${filtered.length} owners</button>`;
+    } else if(!t && ownerShowAll && lastOwnerScores.length > OWNER_DEFAULT_LIMIT){
+      toggleHtml = `<button class="owner-toggle-btn" id="ownerShowAllBtn">Show top ${OWNER_DEFAULT_LIMIT} only</button>`;
+    }
+
+    ownerLeaderboard.innerHTML = `<div class="owner-list-wrap">${cardsHtml}</div>${toggleHtml}`;
+
+    const toggleBtn = document.getElementById('ownerShowAllBtn');
+    if(toggleBtn){
+      toggleBtn.addEventListener('click', () => {
+        ownerShowAll = !ownerShowAll;
+        renderOwnerLeaderboardList(ownerSearchTerm);
+      });
+    }
   }
 
   // ---------- HEAD-TO-HEAD COMPARISON ----------
@@ -1683,9 +1776,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const renderChips = (teamList, otherList) => teamList.map(t => {
       const isShared = otherList.includes(t);
       const accent = teamAccentColor(t);
-      const style = accent ? ` style="border-left:3px solid ${accent}${isShared ? ';background:rgba(240,200,105,0.12)' : ''}"` : '';
+      const borderStyle = accent ? `border-left:3px solid ${accent};` : '';
+      const style = isShared
+        ? ` style="${borderStyle}background:rgba(240,200,105,0.28);border-top:1px solid var(--gold);border-right:1px solid var(--gold);border-bottom:1px solid var(--gold);box-shadow:0 0 0 1px rgba(240,200,105,0.3);"`
+        : (borderStyle ? ` style="${borderStyle}"` : '');
       const abbrStyle = accent ? ` style="color:${accent}"` : '';
-      return `<span class="owner-detail-chip"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${lastTeamScoreMap[t]||0}</b></span>`;
+      const sharedTag = isShared ? ' <span class="chip-shared-tag">SHARED</span>' : '';
+      return `<span class="owner-detail-chip${isShared ? ' shared' : ''}"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${lastTeamScoreMap[t]||0}</b>${sharedTag}</span>`;
     }).join('');
 
     const diff = totalA - totalB;
@@ -1960,6 +2057,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       const tab = btn.getAttribute('data-tab');
       document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
       document.getElementById('tab-live').style.display = tab === 'live' ? '' : 'none';
+      document.getElementById('tab-insights').style.display = tab === 'insights' ? '' : 'none';
     });
   });
 
