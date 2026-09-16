@@ -80,3 +80,4 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: 'Could not generate upload URL: ' + err.message };
   }
 };
+
