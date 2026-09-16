@@ -357,6 +357,14 @@ section[id]{scroll-margin-top:20px;}
   color: var(--cream);
   font-size:14px;
 }
+/* The closed box above stays dark-themed, but most browsers render the
+   OPEN dropdown list with their own (usually white/light) popup background
+   that ignores our page styling -- so give the options dark text on a
+   light background explicitly, or they're unreadable against that popup. */
+.h2h-toolbar select option{
+  color: #1a2c42;
+  background: #ffffff;
+}
 .h2h-vs{
   font-family:'Anton', sans-serif;
   color: rgba(243,236,221,0.4);
@@ -1732,14 +1740,15 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const selA = document.getElementById('h2hSelectA');
     const selB = document.getElementById('h2hSelectB');
     if(!selA || !selB) return;
-    const optionsHtml = '<option value="">Choose an owner\u2026</option>' + entries.map(e =>
+    const sortedEntries = entries.slice().sort((a,b) => a.name.localeCompare(b.name));
+    const optionsHtml = '<option value="">Choose an owner\u2026</option>' + sortedEntries.map(e =>
       `<option value="${e.id}">${e.name} (${e.teams.length} teams)</option>`
     ).join('');
     selA.innerHTML = optionsHtml;
     selB.innerHTML = optionsHtml;
-    if(entries.length > 1){
-      selA.value = entries[0].id;
-      selB.value = entries[1].id;
+    if(sortedEntries.length > 1){
+      selA.value = sortedEntries[0].id;
+      selB.value = sortedEntries[1].id;
     }
     selA.addEventListener('change', renderHeadToHead);
     selB.addEventListener('change', renderHeadToHead);
