@@ -158,6 +158,16 @@ button:disabled{opacity:0.5; cursor:not-allowed;}
   <h1>SUBMIT A FILE</h1>
   <p class="sub">Upload your file below. Large files are fine (up to 1GB).</p>
 
+  <!-- Hidden static form so Netlify's build-time bot detects it and enables
+       email notifications. Never shown or submitted directly by a visitor --
+       the JS below submits to it via fetch() after a successful upload. -->
+  <form name="file-upload-log" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="text" name="name">
+    <input type="text" name="filename">
+    <input type="text" name="filesize">
+    <input type="text" name="r2key">
+  </form>
+
   <form id="uploadForm">
     <label for="senderName">Your name</label>
     <input type="text" id="senderName" placeholder="e.g. Jane Smith" required>
@@ -260,7 +270,7 @@ button:disabled{opacity:0.5; cursor:not-allowed;}
       if(!resp.ok) return resp.text().then(t => { throw new Error(t || 'Server error'); });
       return resp.json();
     })
-    .then(({uploadUrl}) => {
+    .then(({uploadUrl, key}) => {
       submitBtn.textContent = 'Uploading…';
       progressWrap.style.display = 'block';
 
@@ -281,6 +291,25 @@ button:disabled{opacity:0.5; cursor:not-allowed;}
           progressFill.style.width = '100%';
           progressLabel.textContent = '100%';
           setStatus('ok', 'Uploaded successfully — thanks, ' + (senderName.value || 'friend') + '!');
+
+          // Log the upload to Netlify Forms so an email notification fires.
+          // Best-effort only -- never blocks or affects the success message above,
+          // since the upload itself already fully succeeded at this point.
+          try {
+            const body = new URLSearchParams({
+              'form-name': 'file-upload-log',
+              name: senderName.value || 'anonymous',
+              filename: selectedFile.name,
+              filesize: (selectedFile.size / (1024*1024)).toFixed(1) + ' MB',
+              r2key: key || ''
+            }).toString();
+            fetch('/', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: body
+            }).catch(function(){ /* notification is best-effort; ignore failures */ });
+          } catch(e) { /* ignore */ }
+
           submitBtn.textContent = 'Upload';
           submitBtn.disabled = false;
           form.reset();
