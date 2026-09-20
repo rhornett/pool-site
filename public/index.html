@@ -1508,7 +1508,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     if(history.length && history[0].games === 0) return history;
     const zeroScores = {};
     entries.forEach(e => { zeroScores[e.id] = 0; });
-    return [{ games: 0, date: null, label: 'Season start', scores: zeroScores }].concat(history);
+    return [{ games: 0, week: 0, date: null, label: 'Season start', scores: zeroScores }].concat(history);
   }
 
   function loadHistory(){
@@ -1538,36 +1538,38 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   }
 
   function maybeRecordHistoryCheckpoint(stats, ownerScores){
+    // Requires a real NFL week number from the live scoreboard feed (see
+    // fetchLiveGameStatus below) -- skip rather than guess if it hasn't
+    // loaded yet. This runs again automatically once that fetch resolves.
+    if(currentWeekNumber == null) return;
+
     const games = totalGamesPlayed(stats);
     // loadHistory() guarantees at least one entry (the zero-start), so this
     // always exists by the time the app is running.
     const last = scoreHistory[scoreHistory.length - 1];
 
-    if(games <= last.games) return; // no new results since the last checkpoint
-
     const scores = {};
     ownerScores.forEach(o => { scores[o.id] = o.total; });
 
-    const lastTime = last.date ? new Date(last.date).getTime() : 0;
-    const enoughTimePassed = (Date.now() - lastTime) >= MIN_CHECKPOINT_GAP_MS;
-
-    if(enoughTimePassed){
-      // A new week's worth of time has passed -- lock in a fresh checkpoint,
-      // leaving the previous one exactly as it was.
-      scoreHistory.push({
-        games: games,
-        date: new Date().toISOString(),
-        label: liveState.asOf || DATA.standings_as_of,
-        scores: scores
-      });
-    } else {
-      // Still within the same week as the last checkpoint -- update it in
-      // place so the chart's most recent point always reflects the current
-      // live score, rather than freezing at whatever it showed days ago.
+    if(last.week === currentWeekNumber){
+      // Same NFL week as the last checkpoint -- update it in place so the
+      // chart's most recent point always reflects the current live score,
+      // rather than freezing at whatever it showed earlier in the week.
+      if(games < last.games) return; // don't regress on a stale/late sync
       last.games = games;
       last.date = new Date().toISOString();
       last.label = liveState.asOf || DATA.standings_as_of;
       last.scores = scores;
+    } else {
+      // A new NFL week has begun -- lock in a fresh checkpoint, leaving the
+      // previous week's point exactly as it was.
+      scoreHistory.push({
+        games: games,
+        week: currentWeekNumber,
+        date: new Date().toISOString(),
+        label: liveState.asOf || DATA.standings_as_of,
+        scores: scores
+      });
     }
     saveHistory(scoreHistory);
   }
@@ -1956,6 +1958,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       let lbl;
       if(!scoreHistory[i].date){
         lbl = 'Start';
+      } else if(typeof scoreHistory[i].week === 'number'){
+        lbl = 'Wk ' + scoreHistory[i].week;
       } else {
         const d = new Date(scoreHistory[i].date);
         lbl = isNaN(d) ? ('#' + (i+1)) : (d.getMonth()+1) + '/' + d.getDate();
@@ -2180,12 +2184,14 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // state (scheduled / in-progress / final), not just final records. Polled
   // independently since "live now" changes minute to minute, not week to week.
   let liveGameInfo = {}; // team full name -> {quarter, clock}
+  let currentWeekNumber = null; // real NFL week number, from this same feed
 
   function fetchLiveGameStatus(){
     if(typeof fetch !== 'function') return;
     fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', {cache:'no-store'})
       .then(function(resp){ if(!resp.ok) throw new Error('bad status'); return resp.json(); })
       .then(function(json){
+        if(json.week && typeof json.week.number === 'number') currentWeekNumber = json.week.number;
         const nowLive = {};
         (json.events || []).forEach(function(ev){
           const comp = (ev.competitions || [])[0];
