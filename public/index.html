@@ -1543,18 +1543,32 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     // always exists by the time the app is running.
     const last = scoreHistory[scoreHistory.length - 1];
 
-    if(last.games >= games) return; // no new results since last checkpoint
-    const lastTime = last.date ? new Date(last.date).getTime() : 0;
-    if(Date.now() - lastTime < MIN_CHECKPOINT_GAP_MS) return; // too soon since last checkpoint
+    if(games <= last.games) return; // no new results since the last checkpoint
 
     const scores = {};
     ownerScores.forEach(o => { scores[o.id] = o.total; });
-    scoreHistory.push({
-      games: games,
-      date: new Date().toISOString(),
-      label: liveState.asOf || DATA.standings_as_of,
-      scores: scores
-    });
+
+    const lastTime = last.date ? new Date(last.date).getTime() : 0;
+    const enoughTimePassed = (Date.now() - lastTime) >= MIN_CHECKPOINT_GAP_MS;
+
+    if(enoughTimePassed){
+      // A new week's worth of time has passed -- lock in a fresh checkpoint,
+      // leaving the previous one exactly as it was.
+      scoreHistory.push({
+        games: games,
+        date: new Date().toISOString(),
+        label: liveState.asOf || DATA.standings_as_of,
+        scores: scores
+      });
+    } else {
+      // Still within the same week as the last checkpoint -- update it in
+      // place so the chart's most recent point always reflects the current
+      // live score, rather than freezing at whatever it showed days ago.
+      last.games = games;
+      last.date = new Date().toISOString();
+      last.label = liveState.asOf || DATA.standings_as_of;
+      last.scores = scores;
+    }
     saveHistory(scoreHistory);
   }
 
