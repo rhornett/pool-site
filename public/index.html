@@ -474,7 +474,10 @@ section[id]{scroll-margin-top:20px;}
 .badge.sb-champ{background: linear-gradient(90deg, var(--gold), var(--gold-bright)); color: var(--navy-deep);}
 .badge.live-badge{
   animation: live-pulse 1.6s ease-in-out infinite;
+  text-decoration:none;
+  cursor:pointer;
 }
+.badge.live-badge:hover{opacity:0.85; text-decoration:underline;}
 .badge.live-badge.live-winning, .chip-live.live-winning{background: rgba(127,214,138,0.2); color:#7fd68a;}
 .badge.live-badge.live-losing, .chip-live.live-losing{background: rgba(224,102,90,0.18); color: #ff8a7a;}
 .badge.live-badge.live-tied, .chip-live.live-tied{background: rgba(240,200,105,0.2); color: var(--gold-bright);}
@@ -495,7 +498,10 @@ section[id]{scroll-margin-top:20px;}
   border-radius:3px;
   margin-left:2px;
   animation: live-pulse 1.6s ease-in-out infinite;
+  text-decoration:none;
+  cursor:pointer;
 }
+.chip-live:hover{opacity:0.85; text-decoration:underline;}
 .team-score-total{
   font-family:'Anton', sans-serif;
   font-size:18px;
@@ -1505,7 +1511,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     document.getElementById('teamScoresBoard').innerHTML = teamScores.map((t,i) => {
       let badges = `<span class="badge">${t.stats.wins}-${t.stats.losses}</span>`;
       const live = liveGameInfo[t.team];
-      if(live) badges += `<span class="badge live-badge live-${live.state}">\u25CF LIVE Q${live.quarter} ${live.clock} \u00b7 ${live.myScore}-${live.oppScore}</span>`;
+      if(live) badges += `<a class="badge live-badge live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF LIVE Q${live.quarter} ${live.clock} \u00b7 ${live.myScore}-${live.oppScore}</a>`;
       if(t.stats.divisionWinner) badges += `<span class="badge div-winner">Division Champ</span>`;
       if(t.stats.playoffWins > 0) badges += `<span class="badge">${t.stats.playoffWins} Playoff W</span>`;
       if(t.stats.confChamp) badges += `<span class="badge conf-champ">Conf Champ</span>`;
@@ -1712,7 +1718,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             const style = accent ? ` style="border-left:3px solid ${accent}"` : '';
             const abbrStyle = accent ? ` style="color:${accent}"` : '';
             const live = liveGameInfo[b.team];
-            const liveTag = live ? ` <span class="chip-live live-${live.state}">\u25CF ${live.myScore}-${live.oppScore}</span>` : '';
+            const liveTag = live ? ` <a class="chip-live live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF ${live.myScore}-${live.oppScore}</a>` : '';
             return `<span class="owner-detail-chip"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[b.team]||''}</b> ${b.team} <b>${b.score}</b>${liveTag}</span>`;
           }).join('')}
         </div>
@@ -2169,6 +2175,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             if(myScore > oppScore) state = 'winning';
             else if(myScore < oppScore) state = 'losing';
             nowLive[name] = {
+              gameId: ev.id,
               quarter: comp.status.period,
               clock: comp.status.displayClock,
               myScore: myScore,
