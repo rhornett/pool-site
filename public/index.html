@@ -226,6 +226,34 @@ section[id]{scroll-margin-top:20px;}
 .owner-rank.top3{color:#c98a4b;}
 .owner-info{flex:1; min-width:0;}
 .owner-name{font-weight:700; font-size:15.5px;}
+.owner-meta{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:4px;
+}
+.owner-weekly-delta{
+  font-size:12.5px;
+  color: rgba(243,236,221,0.55);
+}
+.rank-change{
+  font-size:12px;
+  font-weight:700;
+}
+.rank-change.up{color:#7fd68a;}
+.rank-change.down{color:#ff8a7a;}
+.rank-change.none{color:rgba(243,236,221,0.35);}
+.owner-highlight{
+  font-size:11px;
+  font-weight:600;
+  padding:2px 7px;
+  border-radius:3px;
+  white-space:nowrap;
+}
+.owner-highlight.top-scorer{background: rgba(240,200,105,0.2); color: var(--gold-bright);}
+.owner-highlight.quiet-week{background: rgba(255,255,255,0.06); color: rgba(243,236,221,0.5);}
+.owner-highlight.climber{background: rgba(127,214,138,0.2); color:#7fd68a;}
 .owner-score{
   font-family:'Anton', sans-serif;
   font-size:26px;
@@ -1552,6 +1580,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     renderOwnerLeaderboardList(ownerSearchTerm);
     renderHeadToHead();
     renderScoreHistory(); // async -- fetches each completed week fresh, nothing stored
+    computeLastWeekComparison(); // async -- feeds the weekly delta / rank movement shown per owner
   }
 
   let lastTeamScoreMap = {};
@@ -1701,13 +1730,56 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const isTruncated = !t && !ownerShowAll && filtered.length > OWNER_DEFAULT_LIMIT;
     const visible = isTruncated ? filtered.slice(0, OWNER_DEFAULT_LIMIT) : filtered;
 
+    // Weekly points scored + rank movement vs. last week, and who to highlight
+    // for it -- computed across the FULL field so the badges land on the right
+    // owner(s) even if that owner isn't currently visible (search/truncation).
+    const weekly = getWeeklyStats();
+    let maxDelta = null, minDelta = null, hasSpread = false, maxClimb = null;
+    if(weekly){
+      const deltaVals = Object.keys(weekly.deltas).map(id => weekly.deltas[id]);
+      maxDelta = Math.max(...deltaVals);
+      minDelta = Math.min(...deltaVals);
+      hasSpread = maxDelta > minDelta;
+      const climbVals = Object.keys(weekly.rankChanges).map(id => weekly.rankChanges[id]).filter(v => v != null);
+      maxClimb = climbVals.length ? Math.max(...climbVals) : null;
+    }
+
     const cardsHtml = visible.map((o) => {
       const sortedBreakdown = o.breakdown.slice().sort((a,b)=>b.score-a.score);
+
+      let metaHtml = '';
+      if(weekly){
+        const delta = weekly.deltas[o.id];
+        const rankChange = weekly.rankChanges[o.id];
+        let rankChangeHtml;
+        if(rankChange == null || rankChange === 0){
+          rankChangeHtml = `<span class="rank-change none">\u2013</span>`;
+        } else if(rankChange > 0){
+          rankChangeHtml = `<span class="rank-change up">\u25B2${rankChange}</span>`;
+        } else {
+          rankChangeHtml = `<span class="rank-change down">\u25BC${Math.abs(rankChange)}</span>`;
+        }
+
+        const badges = [];
+        if(hasSpread && delta === maxDelta) badges.push('<span class="owner-highlight top-scorer">\uD83D\uDD25 Top scorer this week</span>');
+        if(hasSpread && delta === minDelta) badges.push('<span class="owner-highlight quiet-week">\uD83D\uDE34 Quietest week</span>');
+        if(maxClimb != null && maxClimb > 0 && rankChange === maxClimb) badges.push('<span class="owner-highlight climber">\uD83D\uDCC8 Biggest climber</span>');
+
+        metaHtml = `
+          <div class="owner-meta">
+            <span class="owner-weekly-delta">+${delta} this wk</span>
+            ${rankChangeHtml}
+            ${badges.join('')}
+          </div>
+        `;
+      }
+
       return `
         <div class="owner-card">
           <div class="owner-rank ${o.rankClass}">${o.rankDisplay}</div>
           <div class="owner-info">
             <div class="owner-name">${o.name}</div>
+            ${metaHtml}
           </div>
           ${lastPayouts[o.id] ? `<div class="owner-payout">${fmtMoney(lastPayouts[o.id])}</div>` : ''}
           <div class="owner-score">${o.total}</div>
@@ -1852,6 +1924,65 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         weekResultsCache[weekNum] = results; // completed weeks never change -- safe to cache for this session
         return results;
       });
+  }
+
+  // ---------- WEEKLY DELTA / RANK MOVEMENT (reuses the same per-week cache above) ----------
+  // Full-field version of the same computation the chart does for its top 5 --
+  // needed here for every owner, to show "+N this week" and rank movement on
+  // the leaderboard. Nothing stored: recomputed each time, same as the chart.
+  let lastWeekData = null; // {totals:{id:score}, ranks:{id:rank}}, or null pre-Week-2 / not loaded yet
+  let weeklyRenderToken = 0;
+
+  function computeLastWeekComparison(){
+    if(currentWeekNumber == null || currentWeekNumber <= 1){
+      lastWeekData = null; // no prior week exists yet to compare against
+      renderOwnerLeaderboardList(ownerSearchTerm);
+      return;
+    }
+    const myToken = ++weeklyRenderToken;
+    const pastWeeks = [];
+    for(let w = 1; w < currentWeekNumber; w++) pastWeeks.push(w);
+
+    Promise.all(pastWeeks.map(fetchWeekResults))
+      .then(function(weekResultsList){
+        if(myToken !== weeklyRenderToken) return;
+        const cumulativeWins = {};
+        teamNames.forEach(t => cumulativeWins[t] = 0);
+        weekResultsList.forEach(function(results){
+          teamNames.forEach(function(t){ if(results[t] === true) cumulativeWins[t] += 1; });
+        });
+
+        const totals = {};
+        entries.forEach(function(e){
+          totals[e.id] = e.teams.reduce(function(s,t){ return s + (cumulativeWins[t.team] || 0); }, 0);
+        });
+        const sortedIds = Object.keys(totals).sort(function(a,b){ return totals[b] - totals[a]; });
+        const ranks = {};
+        sortedIds.forEach(function(id, i){
+          ranks[id] = (i > 0 && totals[sortedIds[i-1]] === totals[id]) ? ranks[sortedIds[i-1]] : i + 1;
+        });
+
+        lastWeekData = {totals: totals, ranks: ranks};
+        renderOwnerLeaderboardList(ownerSearchTerm);
+      })
+      .catch(function(){
+        if(myToken !== weeklyRenderToken) return;
+        lastWeekData = null;
+        renderOwnerLeaderboardList(ownerSearchTerm);
+      });
+  }
+
+  // Returns {deltas:{id:pointsThisWeek}, rankChanges:{id:placesMovedUp}} for the
+  // CURRENT full field (lastOwnerScores), or null if last week isn't known yet.
+  function getWeeklyStats(){
+    if(!lastWeekData) return null;
+    const deltas = {}, rankChanges = {};
+    lastOwnerScores.forEach(function(o){
+      deltas[o.id] = o.total - (lastWeekData.totals[o.id] || 0);
+      const prevRank = lastWeekData.ranks[o.id];
+      rankChanges[o.id] = (prevRank != null) ? (prevRank - o.rank) : null;
+    });
+    return {deltas: deltas, rankChanges: rankChanges};
   }
 
   function renderScoreHistory(){
