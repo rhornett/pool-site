@@ -254,13 +254,65 @@ section[id]{scroll-margin-top:20px;}
 .owner-highlight.top-scorer{background: rgba(240,200,105,0.2); color: var(--gold-bright);}
 .owner-highlight.quiet-week{background: rgba(255,255,255,0.06); color: rgba(243,236,221,0.5);}
 .owner-highlight.climber{background: rgba(127,214,138,0.2); color:#7fd68a;}
+.owner-highlight.consistent{background: rgba(63,125,179,0.22); color:#7fb8e0;}
+.owner-highlight.boom-bust{background: rgba(185,138,208,0.22); color:#d3a8e8;}
+.highlights-board{
+  display:flex;
+  flex-wrap:wrap;
+  margin:-6px;
+}
+.highlights-board .empty-state{flex:1 1 100%; margin:6px;}
+.highlights-status{font-size:13px; color: rgba(243,236,221,0.65); margin-bottom:14px; line-height:1.5;}
+.highlights-status:empty{display:none;}
+.status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle;}
+.status-dot.live{background: var(--gold-bright); animation: live-pulse 1.6s ease-in-out infinite;}
+.status-dot.done{background:#7fd68a;}
+.highlight-card{
+  flex:1 1 160px;
+  margin:6px;
+  padding:12px 14px;
+  background: rgba(255,255,255,0.04);
+  border:1px solid var(--line);
+  border-left-width:3px;
+  border-radius:6px;
+  min-width:0;
+}
+.highlight-card.top-scorer{border-left-color: var(--gold-bright);}
+.highlight-card.climber{border-left-color:#7fd68a;}
+.highlight-card.quiet-week{border-left-color: rgba(243,236,221,0.35);}
+.highlight-card.consistent{border-left-color:#7fb8e0;}
+.highlight-card.boom-bust{border-left-color:#d3a8e8;}
+.highlight-head{display:flex; align-items:center; margin-bottom:5px;}
+.highlight-icon{font-size:16px; line-height:1; flex:none; margin-right:8px;}
+.highlight-label{
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:12px;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color: rgba(243,236,221,0.55);
+  line-height:1.2;
+}
+.highlight-names{font-weight:700; font-size:14.5px; overflow-wrap:anywhere;}
+.highlight-detail{font-size:12px; color: rgba(243,236,221,0.55); margin-top:2px;}
+.scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
+.scoring-line b{color: rgba(243,236,221,0.75);}
+.owner-score-block{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:3px;
+  flex:none;
+  width:70px;
+}
 .owner-score{
   font-family:'Anton', sans-serif;
   font-size:26px;
   color: var(--gold-bright);
-  flex:none;
-  width:70px;
   text-align:right;
+}
+.owner-sparkline{
+  color: rgba(240,200,105,0.55);
+  display:block;
 }
 .owner-detail{
   display:flex;
@@ -500,6 +552,9 @@ section[id]{scroll-margin-top:20px;}
 .badge.div-winner{background: rgba(212,162,76,0.25); color: var(--gold-bright);}
 .badge.conf-champ{background: rgba(127,214,138,0.2); color:#7fd68a;}
 .badge.sb-champ{background: linear-gradient(90deg, var(--gold), var(--gold-bright)); color: var(--navy-deep);}
+.badge.standing-position{background: rgba(127,214,138,0.16); color:#7fd68a;}
+.badge.standing-hunt{background: rgba(240,200,105,0.16); color: var(--gold-bright);}
+.badge.standing-longshot{background: rgba(255,255,255,0.05); color: rgba(243,236,221,0.4);}
 .badge.live-badge{
   animation: live-pulse 1.6s ease-in-out infinite;
   text-decoration:none;
@@ -905,7 +960,7 @@ footer{
 
     <div class="jump-nav">
       <a href="#live-status-section">Sync &amp; Standings</a>
-      <a href="#scoring-key-section">Scoring</a>
+      <a href="#highlights-section">Highlights</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
       <a href="#team-scores-section">Team Scores</a>
     </div>
@@ -924,12 +979,14 @@ footer{
       </div>
     </section>
 
-    <section id="scoring-key-section">
+    <section id="highlights-section">
       <div class="sec-head">
-        <h2>Scoring</h2>
-        <div class="note">Points are only awarded once a result is official</div>
+        <h2>This Week's Highlights</h2>
+        <div class="note">Who's moving in the pool right now</div>
       </div>
-      <div class="scoring-key" id="scoringKey"></div>
+      <div class="highlights-status" id="highlightsStatus"></div>
+      <div class="highlights-board" id="highlightsBoard"></div>
+      <div class="scoring-line"><b>Scoring:</b> +1 per win &middot; +5 division &middot; +3 per playoff win &middot; +5 conference &middot; +10 Super Bowl &mdash; awarded once a result is official</div>
     </section>
 
     <section id="owner-leaderboard-section">
@@ -947,7 +1004,7 @@ footer{
     <section id="team-scores-section">
       <div class="sec-head">
         <h2>Team Scores</h2>
-        <div class="note">Every team's live point total</div>
+        <div class="note">Every team's live point total &middot; playoff standing is current seed, not official elimination</div>
       </div>
       <div id="teamScoresBoard"></div>
     </section>
@@ -1134,6 +1191,9 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   })();
 
   const fmtMoney = n => '$' + (Math.round(n * 100) / 100).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+  // Signed points delta with a real minus sign (a lagging feed or a manual edit can
+  // make a week's delta negative, and "+-1" looks broken).
+  const fmtDelta = n => (n < 0 ? '\u2212' + Math.abs(n) : '+' + n);
 
   // ---------- TEAM COLORS (official primary/secondary brand hex per team) ----------
   const TEAM_COLORS = {
@@ -1502,6 +1562,23 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
   let liveState = loadStats();
 
+  // Playoff seed per team, from the same standings sync above -- read-only
+  // display info, kept separate from liveState.stats since it's never
+  // manually edited the way wins/division-winner/etc. are.
+  let teamPlayoffSeed = {};
+
+  // A simple, honestly-labeled proxy ("current standing"), not a claim of
+  // official mathematical elimination -- ESPN's own playoffSeed field,
+  // conference-relative 1-16. Seeds 1-7 make the playoffs under the current
+  // format (4 division winners + 3 wild cards).
+  function teamStandingCategory(team){
+    const seed = teamPlayoffSeed[team];
+    if(seed == null) return null; // not synced yet
+    if(seed <= 7) return 'position';
+    if(seed <= 10) return 'hunt';
+    return 'longshot';
+  }
+
   function computeTeamScore(t, stats){
     const s = stats[t];
     let pts = s.wins * 1;
@@ -1510,19 +1587,6 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     if(s.confChamp) pts += 5;
     if(s.sbChamp) pts += 10;
     return pts;
-  }
-
-  function renderScoringKey(){
-    const items = [
-      {pts:'+1', lbl:'Per regular season win'},
-      {pts:'+5', lbl:'Winning your division'},
-      {pts:'+3', lbl:'Per playoff win'},
-      {pts:'+5', lbl:'Winning your conference'},
-      {pts:'+10', lbl:'Winning the Super Bowl'},
-    ];
-    document.getElementById('scoringKey').innerHTML = items.map(i => `
-      <div class="score-key-item"><div class="pts">${i.pts}</div><div class="lbl">${i.lbl}</div></div>
-    `).join('');
   }
 
   function renderLiveScoreboard(){
@@ -1544,6 +1608,10 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       if(t.stats.playoffWins > 0) badges += `<span class="badge">${t.stats.playoffWins} Playoff W</span>`;
       if(t.stats.confChamp) badges += `<span class="badge conf-champ">Conf Champ</span>`;
       if(t.stats.sbChamp) badges += `<span class="badge sb-champ">Super Bowl Champ</span>`;
+      const standing = teamStandingCategory(t.team);
+      if(standing === 'position') badges += `<span class="badge standing-position">Playoff position</span>`;
+      else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt</span>`;
+      else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot</span>`;
       return `
         <div class="team-score-row${live ? ' team-is-live live-' + live.state : ''}">
           <div class="team-rank">${i+1}</div>
@@ -1579,8 +1647,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     renderPayoutBreakdown(ownerScores);
     renderOwnerLeaderboardList(ownerSearchTerm);
     renderHeadToHead();
-    renderScoreHistory(); // async -- fetches each completed week fresh, nothing stored
-    computeLastWeekComparison(); // async -- feeds the weekly delta / rank movement shown per owner
+    computeWeeklyProgression().then(function(){
+      renderScoreHistory();
+      renderOwnerLeaderboardList(ownerSearchTerm); // picks up weekly delta / rank movement / consistency badges
+      renderHighlights();
+    }); // async -- fetches each completed week fresh, nothing stored
   }
 
   let lastTeamScoreMap = {};
@@ -1731,18 +1802,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const visible = isTruncated ? filtered.slice(0, OWNER_DEFAULT_LIMIT) : filtered;
 
     // Weekly points scored + rank movement vs. last week, and who to highlight
-    // for it -- computed across the FULL field so the badges land on the right
-    // owner(s) even if that owner isn't currently visible (search/truncation).
-    const weekly = getWeeklyStats();
-    let maxDelta = null, minDelta = null, hasSpread = false, maxClimb = null;
-    if(weekly){
-      const deltaVals = Object.keys(weekly.deltas).map(id => weekly.deltas[id]);
-      maxDelta = Math.max(...deltaVals);
-      minDelta = Math.min(...deltaVals);
-      hasSpread = maxDelta > minDelta;
-      const climbVals = Object.keys(weekly.rankChanges).map(id => weekly.rankChanges[id]).filter(v => v != null);
-      maxClimb = climbVals.length ? Math.max(...climbVals) : null;
-    }
+    // for it -- computed across the FULL field (shared with the front-page
+    // highlight cards) so badges land on the right owner(s) even if that owner
+    // isn't currently visible (search/truncation).
+    const hl = getHighlightSets();
+    const weekly = hl ? hl.weekly : null;
 
     const cardsHtml = visible.map((o) => {
       const sortedBreakdown = o.breakdown.slice().sort((a,b)=>b.score-a.score);
@@ -1761,13 +1825,15 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         }
 
         const badges = [];
-        if(hasSpread && delta === maxDelta) badges.push('<span class="owner-highlight top-scorer">\uD83D\uDD25 Top scorer this week</span>');
-        if(hasSpread && delta === minDelta) badges.push('<span class="owner-highlight quiet-week">\uD83D\uDE34 Quietest week</span>');
-        if(maxClimb != null && maxClimb > 0 && rankChange === maxClimb) badges.push('<span class="owner-highlight climber">\uD83D\uDCC8 Biggest climber</span>');
+        if(hl.topScorer && hl.topScorer.ids[o.id]) badges.push('<span class="owner-highlight top-scorer">\uD83D\uDD25 Top scorer this week</span>');
+        if(hl.quiet && hl.quiet.ids[o.id]) badges.push('<span class="owner-highlight quiet-week">\uD83D\uDE34 Quietest week</span>');
+        if(hl.climber && hl.climber.ids[o.id]) badges.push('<span class="owner-highlight climber">\uD83D\uDCC8 Biggest climber</span>');
+        if(hl.consistent && hl.consistent.ids[o.id]) badges.push('<span class="owner-highlight consistent">\uD83C\uDFAF Most consistent</span>');
+        if(hl.boomBust && hl.boomBust.ids[o.id]) badges.push('<span class="owner-highlight boom-bust">\uD83C\uDFA2 Boom or bust</span>');
 
         metaHtml = `
           <div class="owner-meta">
-            <span class="owner-weekly-delta">+${delta} this wk</span>
+            <span class="owner-weekly-delta">${fmtDelta(delta)} this wk</span>
             ${rankChangeHtml}
             ${badges.join('')}
           </div>
@@ -1782,7 +1848,10 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             ${metaHtml}
           </div>
           ${lastPayouts[o.id] ? `<div class="owner-payout">${fmtMoney(lastPayouts[o.id])}</div>` : ''}
-          <div class="owner-score">${o.total}</div>
+          <div class="owner-score-block">
+            <div class="owner-score">${o.total}</div>
+            ${buildSparkline(o.id)}
+          </div>
         </div>
         <div class="owner-detail">
           ${sortedBreakdown.map(b => {
@@ -1904,7 +1973,6 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // every 60-second live poll). The current, possibly in-progress week uses
   // the same live score the rest of the dashboard already shows.
   let weekResultsCache = {}; // week number -> {team displayName: true|false|undefined}
-  let historyRenderToken = 0; // guards against overlapping renders finishing out of order
 
   function fetchWeekResults(weekNum){
     if(weekResultsCache[weekNum]) return Promise.resolve(weekResultsCache[weekNum]);
@@ -1926,63 +1994,203 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       });
   }
 
-  // ---------- WEEKLY DELTA / RANK MOVEMENT (reuses the same per-week cache above) ----------
-  // Full-field version of the same computation the chart does for its top 5 --
-  // needed here for every owner, to show "+N this week" and rank movement on
-  // the leaderboard. Nothing stored: recomputed each time, same as the chart.
-  let lastWeekData = null; // {totals:{id:score}, ranks:{id:rank}}, or null pre-Week-2 / not loaded yet
-  let weeklyRenderToken = 0;
+  // ---------- WEEKLY PROGRESSION (single shared computation, reused everywhere) ----------
+  // Builds the full per-owner, per-completed-week score progression once, from
+  // the same cached per-week ESPN results. The chart, "last week" comparison,
+  // and consistency stats all derive from this one result instead of each
+  // independently re-fetching and re-aggregating the same weeks.
+  let weeklyProgression = null; // array of {week, totals:{id:score}}, oldest first
+  let progressionToken = 0;
 
-  function computeLastWeekComparison(){
-    if(currentWeekNumber == null || currentWeekNumber <= 1){
-      lastWeekData = null; // no prior week exists yet to compare against
-      renderOwnerLeaderboardList(ownerSearchTerm);
-      return;
+  function computeWeeklyProgression(){
+    if(currentWeekNumber == null){
+      weeklyProgression = null;
+      return Promise.resolve(null);
     }
-    const myToken = ++weeklyRenderToken;
+    const myToken = ++progressionToken;
     const pastWeeks = [];
     for(let w = 1; w < currentWeekNumber; w++) pastWeeks.push(w);
 
-    Promise.all(pastWeeks.map(fetchWeekResults))
+    return Promise.all(pastWeeks.map(fetchWeekResults))
       .then(function(weekResultsList){
-        if(myToken !== weeklyRenderToken) return;
+        if(myToken !== progressionToken) return null;
         const cumulativeWins = {};
         teamNames.forEach(t => cumulativeWins[t] = 0);
-        weekResultsList.forEach(function(results){
+        const byWeek = [];
+
+        weekResultsList.forEach(function(results, idx){
           teamNames.forEach(function(t){ if(results[t] === true) cumulativeWins[t] += 1; });
+          const totals = {};
+          entries.forEach(function(e){
+            totals[e.id] = e.teams.reduce(function(s,t){ return s + (cumulativeWins[t.team] || 0); }, 0);
+          });
+          byWeek.push({ week: idx + 1, totals: totals });
         });
 
-        const totals = {};
-        entries.forEach(function(e){
-          totals[e.id] = e.teams.reduce(function(s,t){ return s + (cumulativeWins[t.team] || 0); }, 0);
-        });
-        const sortedIds = Object.keys(totals).sort(function(a,b){ return totals[b] - totals[a]; });
-        const ranks = {};
-        sortedIds.forEach(function(id, i){
-          ranks[id] = (i > 0 && totals[sortedIds[i-1]] === totals[id]) ? ranks[sortedIds[i-1]] : i + 1;
-        });
+        // The current (possibly still in-progress) week: use the live score the
+        // rest of the dashboard already shows, including any manual bonuses.
+        const currentTotals = {};
+        lastOwnerScores.forEach(function(o){ currentTotals[o.id] = o.total; });
+        byWeek.push({ week: currentWeekNumber, totals: currentTotals });
 
-        lastWeekData = {totals: totals, ranks: ranks};
-        renderOwnerLeaderboardList(ownerSearchTerm);
+        weeklyProgression = byWeek;
+        return byWeek;
       })
       .catch(function(){
-        if(myToken !== weeklyRenderToken) return;
-        lastWeekData = null;
-        renderOwnerLeaderboardList(ownerSearchTerm);
+        if(myToken === progressionToken) weeklyProgression = null;
+        return null;
       });
   }
 
   // Returns {deltas:{id:pointsThisWeek}, rankChanges:{id:placesMovedUp}} for the
-  // CURRENT full field (lastOwnerScores), or null if last week isn't known yet.
+  // CURRENT full field, or null if there's no prior week yet to compare against.
   function getWeeklyStats(){
-    if(!lastWeekData) return null;
+    if(!weeklyProgression || weeklyProgression.length < 1) return null;
+    // Week 1 has no prior week: compare against the season start (everyone at 0),
+    // with no rank movement to report yet.
+    const hasPrior = weeklyProgression.length >= 2;
+    const lastWeekTotals = hasPrior ? weeklyProgression[weeklyProgression.length - 2].totals : {};
+    const lastWeekRanks = {};
+    if(hasPrior){
+      const sortedIds = Object.keys(lastWeekTotals).sort(function(a,b){ return lastWeekTotals[b] - lastWeekTotals[a]; });
+      sortedIds.forEach(function(id, i){
+        lastWeekRanks[id] = (i > 0 && lastWeekTotals[sortedIds[i-1]] === lastWeekTotals[id]) ? lastWeekRanks[sortedIds[i-1]] : i + 1;
+      });
+    }
+
     const deltas = {}, rankChanges = {};
     lastOwnerScores.forEach(function(o){
-      deltas[o.id] = o.total - (lastWeekData.totals[o.id] || 0);
-      const prevRank = lastWeekData.ranks[o.id];
+      deltas[o.id] = o.total - (lastWeekTotals[o.id] || 0);
+      const prevRank = lastWeekRanks[o.id];
       rankChanges[o.id] = (prevRank != null) ? (prevRank - o.rank) : null;
     });
     return {deltas: deltas, rankChanges: rankChanges};
+  }
+
+  // Returns {stdDev:{id:value}} across every completed week's points-scored
+  // (Start-to-Wk1, Wk1-to-Wk2, ...), or null if fewer than 2 such deltas exist
+  // yet -- consistency needs at least two data points to mean anything.
+  function getConsistencyStats(){
+    if(!weeklyProgression) return null;
+    // Only COMPLETED weeks count: a half-played week's partial total would make
+    // anyone whose teams haven't played yet look erratic.
+    const usable = isCurrentWeekComplete() ? weeklyProgression : weeklyProgression.slice(0, -1);
+    if(usable.length < 2) return null;
+    const stdDev = {};
+    lastOwnerScores.forEach(function(o){
+      const deltas = [];
+      let prevTotal = 0; // season starts at zero for everyone
+      usable.forEach(function(wk){
+        deltas.push((wk.totals[o.id] || 0) - prevTotal);
+        prevTotal = wk.totals[o.id] || 0;
+      });
+      const mean = deltas.reduce(function(s,d){ return s+d; }, 0) / deltas.length;
+      const variance = deltas.reduce(function(s,d){ return s + (d-mean)*(d-mean); }, 0) / deltas.length;
+      stdDev[o.id] = Math.sqrt(variance);
+    });
+    return {stdDev: stdDev};
+  }
+
+  // Single source of truth for "who gets highlighted this week" -- used by both
+  // the front-page highlight cards and the per-owner badges on the leaderboard,
+  // so the two can never disagree. Each entry is {ids:{ownerId:true}, ...}, or
+  // null when there's nothing meaningful to highlight (e.g. everyone tied).
+  function getHighlightSets(){
+    const weekly = getWeeklyStats();
+    if(!weekly) return null;
+    const result = {weekly: weekly, topScorer: null, quiet: null, climber: null, consistent: null, boomBust: null};
+
+    const ownerIds = Object.keys(weekly.deltas);
+    const idsWhere = function(map, target){
+      const ids = {};
+      ownerIds.forEach(function(id){ if(map[id] === target) ids[id] = true; });
+      return ids;
+    };
+
+    const deltaVals = ownerIds.map(function(id){ return weekly.deltas[id]; });
+    const maxDelta = Math.max.apply(null, deltaVals), minDelta = Math.min.apply(null, deltaVals);
+    if(maxDelta > minDelta){
+      result.topScorer = {ids: idsWhere(weekly.deltas, maxDelta), delta: maxDelta};
+      result.quiet = {ids: idsWhere(weekly.deltas, minDelta), delta: minDelta};
+    }
+
+    const climbVals = ownerIds.map(function(id){ return weekly.rankChanges[id]; }).filter(function(v){ return v != null; });
+    const maxClimb = climbVals.length ? Math.max.apply(null, climbVals) : null;
+    if(maxClimb != null && maxClimb > 0) result.climber = {ids: idsWhere(weekly.rankChanges, maxClimb), places: maxClimb};
+
+    const consistency = getConsistencyStats();
+    if(consistency){
+      const sdVals = ownerIds.map(function(id){ return consistency.stdDev[id]; });
+      const minSd = Math.min.apply(null, sdVals), maxSd = Math.max.apply(null, sdVals);
+      if(maxSd > minSd){
+        result.consistent = {ids: idsWhere(consistency.stdDev, minSd)};
+        result.boomBust = {ids: idsWhere(consistency.stdDev, maxSd)};
+      }
+    }
+    return result;
+  }
+
+  // One-line statement of how far along the current week is, shown above the highlights.
+  function weekStatusHtml(){
+    const p = weekGameProgress;
+    if(currentWeekNumber == null || !p || !p.total) return '';
+    const wk = 'Week ' + currentWeekNumber;
+    if(isCurrentWeekComplete()) return '<span class="status-dot done"></span>' + wk + ' is complete \u2014 these are the final numbers for the week.';
+    if(p.final === 0) return '<span class="status-dot live"></span>' + wk + ' has no final results yet (0 of ' + p.total + ' games). Highlights fill in as games finish.';
+    return '<span class="status-dot live"></span>' + wk + ' is in progress \u2014 ' + p.final + ' of ' + p.total + ' games final. Highlights are based on results so far and will shift as the rest finish.';
+  }
+
+  // Front-page "This Week's Highlights" cards.
+  function renderHighlights(){
+    const container = document.getElementById('highlightsBoard');
+    const statusEl = document.getElementById('highlightsStatus');
+    if(!container) return;
+    if(currentWeekNumber == null){
+      if(statusEl) statusEl.innerHTML = '';
+      container.innerHTML = liveFeedFailed
+        ? '<div class="empty-state">Live results are unavailable right now, so weekly highlights can\u2019t be calculated.</div>'
+        : '<div class="empty-state">Loading this week\u2019s results\u2026</div>';
+      return;
+    }
+    if(statusEl) statusEl.innerHTML = weekStatusHtml();
+    const hl = getHighlightSets();
+    if(!hl){
+      container.innerHTML = '<div class="empty-state">Couldn\u2019t load the week\u2019s results right now \u2014 try Refresh Live Sync in a moment.</div>';
+      return;
+    }
+
+    // Owner names for a set of ids, in current-rank order; duplicate names
+    // (someone with several entries) collapse to "Name (\u00D72)"; long ties
+    // are trimmed to two names plus a "+N more".
+    const namesFor = function(ids){
+      const counts = {}, order = [];
+      lastOwnerScores.forEach(function(o){
+        if(!ids[o.id]) return;
+        if(counts[o.name] == null){ counts[o.name] = 0; order.push(o.name); }
+        counts[o.name] += 1;
+      });
+      const labels = order.map(function(n){ return counts[n] > 1 ? n + ' (\u00D7' + counts[n] + ')' : n; });
+      // up to three names read fine; beyond that, two names plus a count
+      if(labels.length <= 3) return labels.join(', ');
+      return labels.slice(0, 2).join(', ') + ' +' + (labels.length - 2) + ' more';
+    };
+    const when = isCurrentWeekComplete() ? ' this week' : ' so far';
+    const pts = function(n){ return fmtDelta(n) + (Math.abs(n) === 1 ? ' pt' : ' pts') + when; };
+
+    const cards = [];
+    if(hl.topScorer) cards.push({cls: 'top-scorer', icon: '\uD83D\uDD25', label: 'Top scorer', ids: hl.topScorer.ids, detail: pts(hl.topScorer.delta)});
+    if(hl.climber) cards.push({cls: 'climber', icon: '\uD83D\uDCC8', label: 'Biggest climber', ids: hl.climber.ids, detail: '\u25B2' + hl.climber.places + (hl.climber.places === 1 ? ' place' : ' places') + when});
+    if(hl.quiet) cards.push({cls: 'quiet-week', icon: '\uD83D\uDE34', label: 'Quietest week', ids: hl.quiet.ids, detail: pts(hl.quiet.delta)});
+    if(hl.consistent) cards.push({cls: 'consistent', icon: '\uD83C\uDFAF', label: 'Most consistent', ids: hl.consistent.ids, detail: 'Steadiest over completed weeks'});
+    if(hl.boomBust) cards.push({cls: 'boom-bust', icon: '\uD83C\uDFA2', label: 'Boom or bust', ids: hl.boomBust.ids, detail: 'Biggest swings over completed weeks'});
+
+    container.innerHTML = cards.length ? cards.map(function(c){
+      return '<div class="highlight-card ' + c.cls + '">' +
+        '<div class="highlight-head"><span class="highlight-icon">' + c.icon + '</span><span class="highlight-label">' + c.label + '</span></div>' +
+        '<div class="highlight-names">' + namesFor(c.ids) + '</div>' +
+        '<div class="highlight-detail">' + c.detail + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty-state">No standout performers yet this week.</div>';
   }
 
   function renderScoreHistory(){
@@ -1992,48 +2200,42 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       container.innerHTML = '<div class="empty-state">Loading season history\u2026</div>';
       return;
     }
+    if(!weeklyProgression){
+      container.innerHTML = '<div class="empty-state">Couldn\u2019t load season history right now \u2014 try again shortly.</div>';
+      return;
+    }
 
-    const myToken = ++historyRenderToken;
     const topN = lastOwnerScores.slice(0, 5);
-
     const zeroScores = {};
     entries.forEach(e => { zeroScores[e.id] = 0; });
     const points = [{ label: 'Start', scores: zeroScores }];
+    weeklyProgression.forEach(function(wk){
+      points.push({ label: 'Wk ' + wk.week, scores: wk.totals });
+    });
 
-    const pastWeeks = [];
-    for(let w = 1; w < currentWeekNumber; w++) pastWeeks.push(w);
+    drawHistoryChart(points, topN);
+  }
 
-    Promise.all(pastWeeks.map(fetchWeekResults))
-      .then(function(weekResultsList){
-        if(myToken !== historyRenderToken) return; // a newer render started -- drop this one
-        const cumulativeWins = {};
-        teamNames.forEach(t => cumulativeWins[t] = 0);
+  // Tiny personal trend line for one owner's own card -- reuses the same
+  // weeklyProgression data the shared chart uses, just for a single owner
+  // instead of the top 5. Returns '' if there's not enough data yet.
+  function buildSparkline(ownerId){
+    if(!weeklyProgression || weeklyProgression.length < 1) return '';
+    const vals = [0]; // season starts at zero
+    weeklyProgression.forEach(function(wk){ vals.push(wk.totals[ownerId] || 0); });
+    if(vals.length < 2) return '';
 
-        weekResultsList.forEach(function(results, idx){
-          teamNames.forEach(function(t){
-            if(results[t] === true) cumulativeWins[t] += 1;
-          });
-          const scores = {};
-          entries.forEach(function(e){
-            scores[e.id] = e.teams.reduce(function(s,t){ return s + (cumulativeWins[t.team] || 0); }, 0);
-          });
-          points.push({ label: 'Wk ' + (idx + 1), scores: scores });
-        });
+    const w = 56, h = 20, pad = 2;
+    const max = Math.max(1, ...vals);
+    const xStep = (w - pad*2) / (vals.length - 1);
+    const yScale = v => h - pad - (v/max) * (h - pad*2);
+    const pts = vals.map((v,i) => (pad + i*xStep) + ',' + yScale(v)).join(' ');
+    const lastX = pad + (vals.length-1)*xStep, lastY = yScale(vals[vals.length-1]);
 
-        // The current (possibly still in-progress) week: use the live score
-        // the rest of the dashboard already shows, including any manual
-        // division/conference/Super Bowl bonuses -- those aren't derivable
-        // from ESPN's plain win/loss-per-week data.
-        const currentScores = {};
-        lastOwnerScores.forEach(function(o){ currentScores[o.id] = o.total; });
-        points.push({ label: 'Wk ' + currentWeekNumber, scores: currentScores });
-
-        drawHistoryChart(points, topN);
-      })
-      .catch(function(){
-        if(myToken !== historyRenderToken) return;
-        container.innerHTML = '<div class="empty-state">Couldn\u2019t load season history right now \u2014 try again shortly.</div>';
-      });
+    return `<svg class="owner-sparkline" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+      <polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <circle cx="${lastX}" cy="${lastY}" r="2" fill="currentColor" />
+    </svg>`;
   }
 
   function drawHistoryChart(points, topN){
@@ -2215,6 +2417,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             if(newStats[t]){
               newStats[t] = Object.assign({}, newStats[t], {wins: parsed[t].wins, losses: parsed[t].losses});
             }
+            teamPlayoffSeed[t] = parsed[t].playoffSeed; // separate from editable stats -- read-only display info
           });
           liveState.stats = newStats;
           liveState.asOf = 'Live-synced ' + new Date().toLocaleString(undefined, {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -2255,16 +2458,18 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             const teamObj = entry.team || {};
             const teamName = teamObj.displayName || teamObj.name || '';
             if(!teamName) return;
-            let wins = 0, losses = 0;
+            let wins = 0, losses = 0, playoffSeed = null;
             (entry.stats || []).forEach(function(st){
-              if(st.name === 'wins') wins = st.value;
-              if(st.name === 'losses') losses = st.value;
+              const nm = (st.name || '').toLowerCase();
+              if(nm === 'wins') wins = st.value;
+              if(nm === 'losses') losses = st.value;
+              if(nm === 'playoffseed') playoffSeed = st.value;
             });
             const exact = teamNames.indexOf(teamName) !== -1;
             const match = exact ? teamName : teamNames.find(function(t){
               return t.indexOf(teamName) !== -1 || teamName.indexOf(t.split(' ').slice(-1)[0]) !== -1;
             });
-            if(match) out[match] = {wins: wins, losses: losses};
+            if(match) out[match] = {wins: wins, losses: losses, playoffSeed: playoffSeed};
           });
         }
         if(node.children) node.children.forEach(walk);
@@ -2284,6 +2489,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // independently since "live now" changes minute to minute, not week to week.
   let liveGameInfo = {}; // team full name -> {quarter, clock}
   let currentWeekNumber = null; // real NFL week number, from this same feed
+  let weekGameProgress = null;  // {final, total} for the current week's slate, from the same feed
+  let liveFeedFailed = false;
+
+  function isCurrentWeekComplete(){
+    return !!(weekGameProgress && weekGameProgress.total > 0 && weekGameProgress.final >= weekGameProgress.total);
+  }
 
   function fetchLiveGameStatus(){
     if(typeof fetch !== 'function') return;
@@ -2291,6 +2502,15 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       .then(function(resp){ if(!resp.ok) throw new Error('bad status'); return resp.json(); })
       .then(function(json){
         if(json.week && typeof json.week.number === 'number') currentWeekNumber = json.week.number;
+        liveFeedFailed = false;
+        const slate = json.events || [];
+        weekGameProgress = {
+          total: slate.length,
+          final: slate.filter(function(ev){
+            const c = (ev.competitions || [])[0];
+            return !!(c && c.status && c.status.type && c.status.type.completed);
+          }).length
+        };
         const nowLive = {};
         (json.events || []).forEach(function(ev){
           const comp = (ev.competitions || [])[0];
@@ -2318,7 +2538,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         liveGameInfo = nowLive;
         renderLiveScoreboard();
       })
-      .catch(function(){ /* best-effort -- leave whatever badges were last shown */ });
+      .catch(function(){ liveFeedFailed = true; renderHighlights(); /* best-effort -- leave whatever badges were last shown */ });
   }
 
   fetchLiveGameStatus();
@@ -2343,7 +2563,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     renderLiveScoreboard();
   });
 
-  renderScoringKey();
+  renderHighlights();
   renderLiveScoreboard();
 })();
 </script>
