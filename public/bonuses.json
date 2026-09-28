@@ -1,0 +1,7 @@
+{
+  "_help": "Team names must match the Team Scores list exactly, for example Seattle Seahawks. Everything below is optional. divisionWinners: teams that won their division (+5 each). The playoff fields are normally read from ESPN automatically; fill them in only to override ESPN. playoffWins: a number per team, like {\"Seattle Seahawks\": 3}. confChamps: a list of team names. sbChamp: a single team name. Leave them empty to use ESPN's results.",
+  "divisionWinners": [],
+  "playoffWins": {},
+  "confChamps": [],
+  "sbChamp": ""
+}

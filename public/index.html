@@ -2142,6 +2142,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
   // One-line statement of how far along the current week is, shown above the highlights.
   function weekStatusHtml(){
+    if(playoffPhase) return '<span class="status-dot live"></span>The playoffs are under way. Playoff, conference and Super Bowl points are added to the totals automatically as games finish.';
     const p = weekGameProgress;
     if(currentWeekNumber == null || !p || !p.total) return '';
     const wk = 'Week ' + currentWeekNumber;
@@ -2163,6 +2164,10 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       return;
     }
     if(statusEl) statusEl.innerHTML = weekStatusHtml();
+    if(playoffPhase){
+      container.innerHTML = '<div class="empty-state">Weekly highlights take a break during the playoffs. Playoff points are added to the totals as games finish.</div>';
+      return;
+    }
     const hl = getHighlightSets();
     if(!hl){
       container.innerHTML = '<div class="empty-state">Couldn\u2019t load the week\u2019s results right now \u2014 try Refresh Live Sync in a moment.</div>';
@@ -2545,6 +2550,90 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   let weekGameProgress = null;  // {final, total} for the current week's slate, from the same feed
   let liveFeedFailed = false;
 
+  // ---------- PLAYOFF + BONUS POINTS ----------
+  // Playoff wins (3 each), conference champion (+5) and Super Bowl winner (+10) are read
+  // straight from ESPN's postseason results. Division winners (+5) come from bonuses.json,
+  // a small file in the repo that also lets the commissioner override anything automatic.
+  let playoffPhase = false;   // true while ESPN's scoreboard is showing playoff games
+  let bonusFile = null;       // parsed bonuses.json, or null if there isn't one yet
+  let playoffAuto = null;     // playoff results read from ESPN: {wins, confChamps, sbChamp}
+  let lastBonusRefresh = 0;
+
+  function fetchBonusFile(){
+    return fetch('bonuses.json', {cache: 'no-store'})
+      .then(function(resp){ if(!resp.ok) throw new Error('missing'); return resp.json(); })
+      .then(function(j){ bonusFile = (j && typeof j === 'object') ? j : null; })
+      .catch(function(){ /* no file yet, or not valid JSON -- keep whatever loaded before */ });
+  }
+
+  // What kind of playoff game is this, going by ESPN's round name?
+  function playoffGameKind(headline){
+    if(!headline) return null;
+    if(/super bowl/i.test(headline)) return 'sb';
+    if(/championship/i.test(headline)) return 'conf';
+    if(/wild card|divisional/i.test(headline)) return 'round';
+    return null; // the Pro Bowl and anything else never scores
+  }
+
+  function fetchPlayoffAuto(){
+    const base = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=3&dates=' + DATA.season_year + '&week=';
+    return Promise.all([1, 2, 3, 4, 5].map(function(w){
+      return fetch(base + w, {cache: 'no-store'}).then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); });
+    })).then(function(list){
+      const found = {wins: {}, confChamps: {}, sbChamp: null};
+      list.forEach(function(json){
+        (json.events || []).forEach(function(ev){
+          const comp = (ev.competitions || [])[0];
+          if(!comp || !comp.status || !comp.status.type || !comp.status.type.completed) return;
+          const kind = playoffGameKind(comp.notes && comp.notes[0] && comp.notes[0].headline);
+          if(!kind) return;
+          const winner = (comp.competitors || []).filter(function(c){ return c.winner === true; })[0];
+          const name = winner && winner.team && winner.team.displayName;
+          if(!name || teamNames.indexOf(name) === -1) return;
+          found.wins[name] = (found.wins[name] || 0) + 1;
+          if(kind === 'conf') found.confChamps[name] = true;
+          if(kind === 'sb') found.sbChamp = name;
+        });
+      });
+      playoffAuto = found;
+    }).catch(function(){ /* keep the last good result rather than dropping points on a hiccup */ });
+  }
+
+  // bonuses.json (all fields optional):
+  //   divisionWinners: ["Seattle Seahawks", ...]        +5 each
+  //   playoffWins:     {"Team": number}                  replaces ESPN's count for that team
+  //   confChamps:      ["Team", ...]                     replaces ESPN's if the list isn't empty
+  //   sbChamp:         "Team"                            replaces ESPN's if not empty
+  function applyBonusesToStats(){
+    if(!bonusFile && !playoffAuto) return; // nothing to apply -- leave the stats as they are
+    const f = bonusFile || {};
+    const auto = playoffAuto || {wins: {}, confChamps: {}, sbChamp: null};
+    const divisionSet = {};
+    (Array.isArray(f.divisionWinners) ? f.divisionWinners : []).forEach(function(t){ divisionSet[t] = true; });
+    const confList = (Array.isArray(f.confChamps) && f.confChamps.length) ? f.confChamps : null;
+    const sbFromFile = (typeof f.sbChamp === 'string' && f.sbChamp) ? f.sbChamp : null;
+    teamNames.forEach(function(t){
+      const s = liveState.stats[t];
+      if(!s) return;
+      s.divisionWinner = !!divisionSet[t];
+      s.playoffWins = (f.playoffWins && typeof f.playoffWins[t] === 'number') ? f.playoffWins[t] : (auto.wins[t] || 0);
+      s.confChamp = confList ? confList.indexOf(t) !== -1 : !!auto.confChamps[t];
+      s.sbChamp = sbFromFile ? sbFromFile === t : auto.sbChamp === t;
+    });
+  }
+
+  function refreshBonuses(){
+    if(typeof fetch !== 'function') return Promise.resolve();
+    if(Date.now() - lastBonusRefresh < 100000) return Promise.resolve(); // about every two minutes at most
+    lastBonusRefresh = Date.now();
+    const jobs = [fetchBonusFile()];
+    if(playoffPhase || (currentWeekNumber != null && currentWeekNumber >= 17)) jobs.push(fetchPlayoffAuto());
+    return Promise.all(jobs).then(function(){
+      applyBonusesToStats();
+      renderLiveScoreboard();
+    });
+  }
+
   function isCurrentWeekComplete(){
     return !!(weekGameProgress && weekGameProgress.total > 0 && weekGameProgress.final >= weekGameProgress.total);
   }
@@ -2564,6 +2653,19 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             return !!(c && c.status && c.status.type && c.status.type.completed);
           }).length
         };
+        // Playoff games carry round names ("AFC Wild Card Playoffs", "Super Bowl LX") in their
+        // notes, and ESPN restarts week numbers at 1 for the postseason. When the playoffs are on,
+        // pin the regular-season week to 18 rather than mistake a playoff round for Week 1-5.
+        playoffPhase = slate.some(function(ev){
+          const c = (ev.competitions || [])[0];
+          const h = c && c.notes && c.notes[0] && c.notes[0].headline;
+          return !!h && /playoff|championship|super bowl|pro bowl/i.test(h);
+        });
+        if(playoffPhase){
+          currentWeekNumber = 18;
+          weekGameProgress = {total: 1, final: 1};
+        }
+        refreshBonuses();
         const nowLive = {};
         (json.events || []).forEach(function(ev){
           const comp = (ev.competitions || [])[0];
