@@ -320,6 +320,8 @@ section[id]{scroll-margin-top:20px;}
 .wk-swatch{display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 5px 0 0; vertical-align:middle;}
 .wk-swatch.up{background:#7fd68a;}
 .wk-swatch.down{background:#ff8a7a;}
+.sync-line{margin-top:8px;}
+.sync-line .sync-status{margin-left:0; display:block;}
 .owner-detail{
   display:flex;
   padding:0 16px 14px 68px;
@@ -965,7 +967,7 @@ footer{
   <div class="tab-pane" id="tab-live">
 
     <div class="jump-nav">
-      <a href="#live-status-section">Sync &amp; Standings</a>
+      <a href="#live-status-section">Status</a>
       <a href="#highlights-section">Highlights</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
       <a href="#team-scores-section">Team Scores</a>
@@ -976,12 +978,12 @@ footer{
         <h2>Live Scoreboard</h2>
         <div class="note" id="standingsAsOf"></div>
       </div>
-      <div class="live-toolbar">
+      <div class="sync-line"><span class="sync-status" id="syncStatus"></span></div>
+      <div class="live-toolbar" id="adminToolbar" style="display:none">
         <button id="trySyncBtn" class="live-btn primary">Refresh Live Sync</button>
         <button id="editStandingsBtn" class="live-btn">Edit Standings</button>
         <button id="downloadSnapshotBtn" class="live-btn">Download This Week's Snapshot</button>
         <button id="resetStandingsBtn" class="live-btn ghost">Reset to Snapshot</button>
-        <span class="sync-status" id="syncStatus"></span>
       </div>
     </section>
 
@@ -2432,17 +2434,19 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
   document.getElementById('downloadSnapshotBtn').addEventListener('click', downloadSnapshot);
 
-  function trySync(isAutoRun){
+  function trySync(isAutoRun, quiet){
     const statusEl = document.getElementById('syncStatus');
     if(typeof fetch !== 'function'){
       if(!isAutoRun){
-        statusEl.textContent = 'Auto-sync unavailable in this browser — use "Edit Standings" to update scores manually.';
+        statusEl.textContent = 'Live updates aren\u2019t available in this browser.';
         statusEl.className = 'sync-status err';
       }
       return;
     }
-    statusEl.textContent = isAutoRun ? 'Checking for live standings…' : 'Syncing…';
-    statusEl.className = 'sync-status';
+    if(!quiet){
+      statusEl.textContent = isAutoRun ? 'Checking for live standings…' : 'Syncing…';
+      statusEl.className = 'sync-status';
+    }
     try {
       fetch('https://site.web.api.espn.com/apis/v2/sports/football/nfl/standings?sort=conferencerank%3Aasc%2Cplayoffseed%3Aasc', {cache:'no-store'})
         .then(function(resp){
@@ -2464,21 +2468,16 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           liveState.synced = true;
           saveStats(liveState);
           renderLiveScoreboard();
-          statusEl.textContent = 'Synced regular-season records from ESPN.';
+          statusEl.textContent = 'Live standings \u00b7 updated ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
           statusEl.className = 'sync-status ok';
         })
         .catch(function(){
-          if(isAutoRun){
-            statusEl.textContent = 'Auto-sync unavailable — showing last saved standings. Use "Edit Standings" to update manually.';
-          } else {
-            statusEl.textContent = 'Auto-sync unavailable right now — use "Edit Standings" to update scores manually.';
-          }
+          if(quiet && liveState.synced) return; // a quiet refresh failed -- keep showing the last good update time
+          statusEl.textContent = 'Live standings are unavailable right now, so these numbers may be a little behind. Retrying automatically.';
           statusEl.className = 'sync-status err';
         });
     } catch(e){
-      statusEl.textContent = isAutoRun
-        ? 'Auto-sync unavailable — showing last saved standings.'
-        : 'Auto-sync unavailable right now — use "Edit Standings" to update scores manually.';
+      statusEl.textContent = 'Live standings are unavailable right now, so these numbers may be a little behind.';
       statusEl.className = 'sync-status err';
     }
   }
@@ -2520,7 +2519,21 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   }
 
   // Auto-run live sync once on page load (falls back silently to saved/snapshot data on failure)
+  // The commissioner tools (manual division/playoff bonuses, snapshot download, reset)
+  // are hidden from regular visitors; open hornett.org/#admin to reveal them.
+  function applyAdminMode(){
+    const bar = document.getElementById('adminToolbar');
+    if(bar) bar.style.display = (location.hash === '#admin') ? '' : 'none';
+  }
+  applyAdminMode();
+  window.addEventListener('hashchange', applyAdminMode);
+
   trySync(true);
+
+  // Keep standings fresh without any buttons: re-sync every couple of minutes while the
+  // tab is visible, and again whenever a visitor comes back to it.
+  setInterval(function(){ if(!document.hidden) trySync(true, true); }, 120000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) trySync(true, true); });
 
   // ---------- LIVE GAME STATUS (which teams are playing RIGHT NOW) ----------
   // Separate from the win/loss sync above -- this hits ESPN's scoreboard feed
