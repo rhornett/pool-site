@@ -1319,7 +1319,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   ];
   scoreboard.innerHTML = scoreCells.map(([num,lbl]) =>
     `<div class="score-cell"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`
-  ).join('') + `<div class="score-cell"><div class="num" id="scoreboardBestScore">—</div><div class="lbl">Best Possible Score</div></div>`;
+  ).join('') + `<div class="score-cell"><div class="num" id="scoreboardBestScore">—</div><div class="lbl">Best Possible Score</div></div>` +
+    `<div class="score-cell"><div class="num" id="scoreboardFavoritePct">—</div><div class="lbl" id="scoreboardFavoriteLbl">Favorite to Win Pool</div></div>`;
 
   // ---------- CONFERENCE TUG OF WAR ----------
   const afcTotal = DATA.conf_count.AFC, nfcTotal = DATA.conf_count.NFC;
@@ -2450,6 +2451,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       lastOwnerScores.forEach(function(o){ currentTotals[o.id] = o.total; });
       const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 4000);
 
+      function fmtOddsPct(id){
+        const pct = (result.probs[id] || 0) * 100;
+        return pct >= 10 ? pct.toFixed(0) : (pct >= 1 ? pct.toFixed(1) : (pct > 0 ? '<1' : '0'));
+      }
+
       const ranked = entries.slice().sort(function(a,b){ return (result.probs[b.id]||0) - (result.probs[a.id]||0); });
       const top5 = ranked.slice(0, 5);
 
@@ -2460,13 +2466,20 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           : 'Live odds are unavailable right now, so this is our best estimate without them \u2014 check back shortly';
       }
 
+      // Headline stat at the top of the page: just the single favorite, so anyone
+      // glancing at the top of the site (not just the Insights tab) sees it too.
+      const favPctEl = document.getElementById('scoreboardFavoritePct');
+      const favLblEl = document.getElementById('scoreboardFavoriteLbl');
+      if(favPctEl && top5.length){
+        favPctEl.textContent = fmtOddsPct(top5[0].id) + '%';
+        if(favLblEl) favLblEl.textContent = 'Favorite: ' + top5[0].name;
+      }
+
       board.innerHTML = top5.map(function(e){
-        const pct = (result.probs[e.id] || 0) * 100;
-        const display = pct >= 10 ? pct.toFixed(0) : (pct >= 1 ? pct.toFixed(1) : (pct > 0 ? '<1' : '0'));
         return '<div class="highlight-card odds-card">' +
           '<div class="highlight-head"><span class="highlight-icon">\uD83C\uDFC6</span><span class="highlight-label">Pool win odds</span></div>' +
           '<div class="highlight-names">' + e.name + '</div>' +
-          '<div class="highlight-detail odds-pct">' + display + '%</div>' +
+          '<div class="highlight-detail odds-pct">' + fmtOddsPct(e.id) + '%</div>' +
         '</div>';
       }).join('');
     }).catch(function(){
