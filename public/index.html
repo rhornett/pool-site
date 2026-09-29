@@ -162,6 +162,7 @@ section[id]{scroll-margin-top:20px;}
   align-items:center;
   gap:12px;
   flex-wrap:wrap;
+  margin:18px 0;
 }
 .live-btn{
   font-family:'Barlow Condensed', sans-serif;
@@ -294,6 +295,8 @@ section[id]{scroll-margin-top:20px;}
 }
 .highlight-names{font-weight:700; font-size:14.5px; overflow-wrap:anywhere;}
 .highlight-detail{font-size:12px; color: rgba(243,236,221,0.55); margin-top:2px;}
+.odds-card{border-left-color: var(--gold-bright);}
+.odds-pct{font-family:'Anton', sans-serif; font-size:22px; color: var(--gold-bright); margin-top:4px;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
@@ -517,6 +520,30 @@ section[id]{scroll-margin-top:20px;}
   border-radius:2px;
   display:inline-block;
 }
+.history-hit{cursor:pointer;}
+.history-detail{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:12px;
+  margin-top:10px;
+  padding:10px 14px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:rgba(255,255,255,0.02);
+  min-height:20px;
+}
+.history-detail-hint{
+  font-size:12.5px;
+  color:rgba(243,236,221,0.45);
+}
+.history-detail-week{
+  font-weight:700;
+  font-size:13px;
+  color:rgba(243,236,221,0.9);
+  margin-right:4px;
+}
+.history-detail .history-legend-item{font-size:12.5px;}
 .owner-list-wrap{
   border:1px solid var(--line);
   border-radius:6px;
@@ -665,6 +692,16 @@ section[id]{scroll-margin-top:20px;}
 }
 
 /* ---------- SECTION HEADERS ---------- */
+.live-status-bar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:8px 16px;
+  padding:18px 0 14px;
+  border-bottom:1px solid var(--line);
+  font-size:14px;
+}
+.live-status-bar .note{font-size:14px; color: rgba(243,236,221,0.55); margin:0;}
 section{padding:52px 0;}
 section + section{border-top:1px solid var(--line);}
 .sec-head{
@@ -973,19 +1010,16 @@ footer{
       <a href="#team-scores-section">Team Scores</a>
     </div>
 
-    <section id="live-status-section">
-      <div class="sec-head">
-        <h2>Live Scoreboard</h2>
-        <div class="note" id="standingsAsOf"></div>
-      </div>
-      <div class="sync-line"><span class="sync-status" id="syncStatus"></span></div>
-      <div class="live-toolbar" id="adminToolbar" style="display:none">
-        <button id="trySyncBtn" class="live-btn primary">Refresh Live Sync</button>
-        <button id="editStandingsBtn" class="live-btn">Edit Standings</button>
-        <button id="downloadSnapshotBtn" class="live-btn">Download This Week's Snapshot</button>
-        <button id="resetStandingsBtn" class="live-btn ghost">Reset to Snapshot</button>
-      </div>
-    </section>
+    <div class="live-status-bar" id="live-status-section">
+      <span class="note" id="standingsAsOf"></span>
+      <span class="sync-status" id="syncStatus"></span>
+    </div>
+    <div class="live-toolbar" id="adminToolbar" style="display:none">
+      <button id="trySyncBtn" class="live-btn primary">Refresh Live Sync</button>
+      <button id="editStandingsBtn" class="live-btn">Edit Standings</button>
+      <button id="downloadSnapshotBtn" class="live-btn">Download This Week's Snapshot</button>
+      <button id="resetStandingsBtn" class="live-btn ghost">Reset to Snapshot</button>
+    </div>
 
     <section id="highlights-section">
       <div class="sec-head">
@@ -1026,6 +1060,7 @@ footer{
       <a href="#payout-section">Payout</a>
       <a href="#h2h-section">Head-to-Head</a>
       <a href="#score-history-section">Score History</a>
+      <a href="#pool-odds-section">Pool Odds</a>
       <a href="#best-possible-section">Best Possible Score</a>
     </div>
 
@@ -1056,6 +1091,14 @@ footer{
         <div class="note">Top 5 owners' scores over time &mdash; builds automatically, nothing to save</div>
       </div>
       <div id="scoreHistoryChart"></div>
+    </section>
+
+    <section id="pool-odds-section">
+      <div class="sec-head">
+        <h2>Pool Odds</h2>
+        <div class="note" id="poolOddsNote">Each owner's live chance of winning the whole pool</div>
+      </div>
+      <div class="highlights-board" id="poolOddsBoard"></div>
     </section>
 
     <section id="best-possible-section">
@@ -1661,6 +1704,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       renderOwnerLeaderboardList(ownerSearchTerm); // picks up weekly delta / rank movement / consistency badges
       renderHighlights();
     }); // async -- fetches each completed week fresh, nothing stored
+    renderPoolOdds(); // async -- throttled internally; fetches live division odds + runs the playoff simulation
   }
 
   let lastTeamScoreMap = {};
@@ -2208,6 +2252,229 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     }).join('') : '<div class="empty-state">No standout performers yet this week.</div>';
   }
 
+  // ---------- POOL ODDS (live playoff simulation) ----------
+  // Each team's division-win chance comes straight from ESPN's own live projection feed
+  // (real, confirmed data, fetched fresh below). ESPN doesn't publish a clean "chance to
+  // win the Super Bowl" number anywhere we could find for a page like this to just read,
+  // so the rest of the bracket -- wild-card seeding, every individual playoff game, the
+  // conference and Super Bowl winner -- is simulated thousands of times using each team's
+  // projected strength as the engine, the same basic technique ESPN's own model uses.
+  // Every input is real, live ESPN data; the simulation itself is ours, and is described
+  // as such wherever it's shown.
+  let nflTeamIdCache = null;
+  let lastPoolOddsRefresh = 0;
+
+  function findEspnTeamIds(node, out){
+    if(!node || typeof node !== 'object') return;
+    if(Array.isArray(node)){ node.forEach(function(n){ findEspnTeamIds(n, out); }); return; }
+    if(typeof node.id === 'string' && typeof node.displayName === 'string') out[node.displayName] = node.id;
+    Object.keys(node).forEach(function(k){ findEspnTeamIds(node[k], out); });
+  }
+
+  function fetchNflTeamIds(){
+    if(nflTeamIdCache) return Promise.resolve(nflTeamIdCache);
+    return fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=40', {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); })
+      .then(function(json){
+        const map = {};
+        findEspnTeamIds(json, map);
+        nflTeamIdCache = map;
+        return map;
+      });
+  }
+
+  function fetchAllTeamProjections(){
+    return fetchNflTeamIds().then(function(idMap){
+      const jobs = teamNames.map(function(name){
+        const id = idMap[name];
+        if(!id) return Promise.resolve([name, null]);
+        const url = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/' + DATA.season_year + '/teams/' + id + '/projection';
+        return fetch(url, {cache:'no-store'})
+          .then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); })
+          .then(function(j){ return [name, {
+            winDiv: typeof j.chanceToWinDivision === 'number' ? j.chanceToWinDivision : null,
+            projWins: typeof j.projectedWins === 'number' ? j.projectedWins : null,
+            projLosses: typeof j.projectedLosses === 'number' ? j.projectedLosses : null
+          }]; })
+          .catch(function(){ return [name, null]; });
+      });
+      return Promise.all(jobs).then(function(pairs){
+        const out = {};
+        pairs.forEach(function(pair){ out[pair[0]] = pair[1]; });
+        return out;
+      });
+    });
+  }
+
+  function simulatePoolOdds(projections, teamMetaArg, entriesArg, currentTotalsArg, trials, rng){
+    rng = rng || Math.random;
+    trials = trials || 4000;
+    const teamsList = Object.keys(teamMetaArg);
+  
+    const power = {};
+    teamsList.forEach(t => {
+      const p = projections[t];
+      if(p && typeof p.projWins === 'number' && typeof p.projLosses === 'number' && (p.projWins+p.projLosses) > 0){
+        power[t] = p.projWins / (p.projWins + p.projLosses);
+      } else {
+        power[t] = 0.5;
+      }
+    });
+  
+    const divisions = {};
+    teamsList.forEach(t => {
+      const conf = teamMetaArg[t][0], div = teamMetaArg[t][1];
+      const key = conf + ' ' + div;
+      (divisions[key] = divisions[key] || []).push(t);
+    });
+    const divisionKeys = Object.keys(divisions);
+    const confOf = {}; teamsList.forEach(t => confOf[t] = teamMetaArg[t][0]);
+  
+    const divWeights = {};
+    divisionKeys.forEach(key => {
+      const teams = divisions[key];
+      let sum = 0;
+      teams.forEach(t => {
+        const p = projections[t];
+        const w = (p && typeof p.winDiv === 'number' && p.winDiv > 0) ? p.winDiv : (1/teams.length);
+        divWeights[t] = w; sum += w;
+      });
+      if(sum <= 0){ teams.forEach(t => divWeights[t] = 1/teams.length); }
+      else { teams.forEach(t => divWeights[t] = divWeights[t] / sum); }
+    });
+  
+    function shuffle(arr){
+      const a = arr.slice();
+      for(let i = a.length - 1; i > 0; i--){
+        const j = Math.floor(rng() * (i + 1));
+        const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+      }
+      return a;
+    }
+    function weightedPick(teams, weights){
+      let r = rng(), acc = 0;
+      for(let i=0;i<teams.length;i++){ acc += weights[teams[i]]; if(r <= acc) return teams[i]; }
+      return teams[teams.length-1];
+    }
+  
+    function gameWinProb(a, b){
+      const diff = (power[a] - power[b]) * 12;
+      return 1 / (1 + Math.pow(10, -diff));
+    }
+    function playGame(a, b){ return rng() < gameWinProb(a, b) ? a : b; }
+  
+    const entryIds = entriesArg.map(e => e.id);
+    const wins = {}; entryIds.forEach(id => wins[id] = 0);
+    const teamStats = {}; teamsList.forEach(t => teamStats[t] = {divWins:0, confChamps:0, sbWins:0, playoffWinsTotal:0});
+  
+    for(let trial = 0; trial < trials; trial++){
+      const divisionWinner = {};
+      const bonusWins = {}; teamsList.forEach(t => bonusWins[t] = 0);
+      const confSeeds = {AFC: [], NFC: []};
+  
+      divisionKeys.forEach(key => {
+        const teams = shuffle(divisions[key]);
+        const winner = weightedPick(teams, divWeights);
+        divisionWinner[winner] = true;
+        teamStats[winner].divWins++;
+        confSeeds[confOf[winner]].push(winner);
+      });
+  
+      ['AFC','NFC'].forEach(conf => {
+        // Shuffle before the (stable) sort-by-power so ties -- including the fully-equal
+        // case -- break randomly each trial instead of always favoring one array position.
+        confSeeds[conf] = shuffle(confSeeds[conf]).sort((a,b) => power[b]-power[a]);
+        const remaining = shuffle(teamsList.filter(t => confOf[t] === conf && !divisionWinner[t]));
+        remaining.sort((a,b) => power[b]-power[a]);
+        const wildcards = remaining.slice(0,3);
+        confSeeds[conf] = confSeeds[conf].concat(wildcards);
+      });
+  
+      const champs = {};
+      ['AFC','NFC'].forEach(conf => {
+        const seeds = confSeeds[conf];
+        const [s1,s2,s3,s4,s5,s6,s7] = seeds;
+        const wc1 = playGame(s2, s7); bonusWins[wc1]++;
+        const wc2 = playGame(s3, s6); bonusWins[wc2]++;
+        const wc3 = playGame(s4, s5); bonusWins[wc3]++;
+        const wcWinners = shuffle([{seed:2,team:wc1},{seed:3,team:wc2},{seed:4,team:wc3}]);
+        wcWinners.sort((a,b) => b.seed - a.seed);
+        const oppForS1 = wcWinners[0].team;
+        const otherTwo = [wcWinners[1].team, wcWinners[2].team];
+        const d1 = playGame(s1, oppForS1); bonusWins[d1]++;
+        const d2 = playGame(otherTwo[0], otherTwo[1]); bonusWins[d2]++;
+        const champ = playGame(d1, d2); bonusWins[champ]++;
+        champs[conf] = champ;
+        teamStats[champ].confChamps++;
+      });
+  
+      const sbWinner = playGame(champs.AFC, champs.NFC); bonusWins[sbWinner]++;
+      teamStats[sbWinner].sbWins++;
+      teamsList.forEach(t => teamStats[t].playoffWinsTotal += bonusWins[t]);
+  
+      let best = -Infinity; const bestIds = [];
+      entriesArg.forEach(e => {
+        let bonus = 0;
+        e.teams.forEach(t => {
+          const team = t.team;
+          if(divisionWinner[team]) bonus += 5;
+          bonus += (bonusWins[team]||0) * 3;
+          if(champs.AFC === team || champs.NFC === team) bonus += 5;
+          if(sbWinner === team) bonus += 10;
+        });
+        const total = (currentTotalsArg[e.id]||0) + bonus;
+        if(total > best + 1e-9){ best = total; bestIds.length = 0; bestIds.push(e.id); }
+        else if(Math.abs(total - best) <= 1e-9){ bestIds.push(e.id); }
+      });
+      const credit = 1/bestIds.length;
+      bestIds.forEach(id => wins[id] += credit);
+    }
+  
+    const probs = {};
+    entryIds.forEach(id => probs[id] = wins[id] / trials);
+    return {probs, teamStats};
+  }
+
+  function renderPoolOdds(){
+    const board = document.getElementById('poolOddsBoard');
+    const noteEl = document.getElementById('poolOddsNote');
+    if(!board) return;
+    if(Date.now() - lastPoolOddsRefresh < 9 * 60 * 1000){
+      return; // already have a recent simulation on screen -- no need to refetch/recompute yet
+    }
+    lastPoolOddsRefresh = Date.now();
+    board.innerHTML = '<div class="empty-state">Loading live division odds and running the playoff simulation\u2026</div>';
+
+    fetchAllTeamProjections().then(function(projections){
+      const currentTotals = {};
+      lastOwnerScores.forEach(function(o){ currentTotals[o.id] = o.total; });
+      const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 4000);
+
+      const ranked = entries.slice().sort(function(a,b){ return (result.probs[b.id]||0) - (result.probs[a.id]||0); });
+      const top5 = ranked.slice(0, 5);
+
+      const gotAnyRealDivData = teamNames.some(function(t){ return projections[t] && typeof projections[t].winDiv === 'number'; });
+      if(noteEl){
+        noteEl.textContent = gotAnyRealDivData
+          ? 'Each owner\u2019s live chance of winning the whole pool \u2014 division odds are ESPN\u2019s real live numbers; the rest of the playoffs is our simulation, run fresh just now'
+          : 'Live odds are unavailable right now, so this is our best estimate without them \u2014 check back shortly';
+      }
+
+      board.innerHTML = top5.map(function(e){
+        const pct = (result.probs[e.id] || 0) * 100;
+        const display = pct >= 10 ? pct.toFixed(0) : (pct >= 1 ? pct.toFixed(1) : (pct > 0 ? '<1' : '0'));
+        return '<div class="highlight-card odds-card">' +
+          '<div class="highlight-head"><span class="highlight-icon">\uD83C\uDFC6</span><span class="highlight-label">Pool win odds</span></div>' +
+          '<div class="highlight-names">' + e.name + '</div>' +
+          '<div class="highlight-detail odds-pct">' + display + '%</div>' +
+        '</div>';
+      }).join('');
+    }).catch(function(){
+      if(noteEl) noteEl.textContent = 'Couldn\u2019t load live odds data right now \u2014 try again shortly.';
+      board.innerHTML = '<div class="empty-state">Live odds are unavailable right now.</div>';
+    });
+  }
+
   function renderScoreHistory(){
     const container = document.getElementById('scoreHistoryChart');
     if(!container) return;
@@ -2324,11 +2591,53 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         svg += `<circle cx="${xScale(i)}" cy="${yScale(pt.scores[o.id] || 0)}" r="3" fill="${color}" />`;
       });
     });
+
+    // A vertical guide line, hidden until a column is hovered or tapped -- when two
+    // lines are close together (or one is hidden behind another), this is how anyone
+    // can still get every owner's exact score for a given week.
+    svg += `<line id="historyGuide" x1="0" y1="${padT}" x2="0" y2="${h-padB}" stroke="rgba(243,236,221,0.35)" stroke-width="1" stroke-dasharray="3,3" opacity="0" />`;
+
+    // Invisible full-height strips, one per week, to catch hover/tap without needing
+    // to land precisely on a thin (or obscured) line.
+    const colW = n > 1 ? xStep : (w - padL - padR);
+    points.forEach((pt,i) => {
+      const x = xScale(i) - colW / 2;
+      svg += `<rect class="history-hit" data-idx="${i}" x="${x}" y="0" width="${colW}" height="${h}" fill="transparent" />`;
+    });
+
     svg += `</svg>`;
 
     const legend = topN.map((o,idx) => `<span class="history-legend-item"><span class="history-swatch" style="background:${palette[idx % palette.length]}"></span>${o.name}</span>`).join('');
 
-    container.innerHTML = svg + `<div class="history-legend">${legend}</div>`;
+    container.innerHTML = svg + `<div class="history-legend">${legend}</div>` +
+      `<div class="history-detail" id="historyDetail"><span class="history-detail-hint">Hover or tap a week to see every owner\u2019s exact score</span></div>`;
+
+    const svgEl = container.querySelector('.history-svg');
+    const guideEl = container.querySelector('#historyGuide');
+    const detailEl = container.querySelector('#historyDetail');
+
+    function showColumn(i){
+      const pt = points[i];
+      guideEl.setAttribute('x1', xScale(i));
+      guideEl.setAttribute('x2', xScale(i));
+      guideEl.setAttribute('opacity', '1');
+      const rows = topN.map((o, idx) => ({name: o.name, score: pt.scores[o.id] || 0, color: palette[idx % palette.length]}))
+        .sort((a,b) => b.score - a.score);
+      const items = rows.map(r => `<span class="history-legend-item"><span class="history-swatch" style="background:${r.color}"></span>${r.name} <b>${r.score}</b></span>`).join('');
+      detailEl.innerHTML = `<span class="history-detail-week">${pt.label}</span>${items}`;
+    }
+
+    container.querySelectorAll('.history-hit').forEach(rect => {
+      const i = parseInt(rect.getAttribute('data-idx'), 10);
+      rect.addEventListener('mouseenter', () => showColumn(i));
+      rect.addEventListener('click', () => showColumn(i));
+    });
+    if(svgEl){
+      svgEl.addEventListener('mouseleave', () => {
+        guideEl.setAttribute('opacity', '0');
+        detailEl.innerHTML = '<span class="history-detail-hint">Hover or tap a week to see every owner\u2019s exact score</span>';
+      });
+    }
   }
 
   function openEditModal(){
