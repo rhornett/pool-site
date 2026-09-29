@@ -2262,48 +2262,43 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // projected strength as the engine, the same basic technique ESPN's own model uses.
   // Every input is real, live ESPN data; the simulation itself is ours, and is described
   // as such wherever it's shown.
-  let nflTeamIdCache = null;
   let lastPoolOddsRefresh = 0;
 
-  function findEspnTeamIds(node, out){
-    if(!node || typeof node !== 'object') return;
-    if(Array.isArray(node)){ node.forEach(function(n){ findEspnTeamIds(n, out); }); return; }
-    if(typeof node.id === 'string' && typeof node.displayName === 'string') out[node.displayName] = node.id;
-    Object.keys(node).forEach(function(k){ findEspnTeamIds(node[k], out); });
-  }
-
-  function fetchNflTeamIds(){
-    if(nflTeamIdCache) return Promise.resolve(nflTeamIdCache);
-    return fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=40', {cache:'no-store'})
-      .then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); })
-      .then(function(json){
-        const map = {};
-        findEspnTeamIds(json, map);
-        nflTeamIdCache = map;
-        return map;
-      });
-  }
+  // ESPN's numeric team IDs, permanent and never change year to year. Confirmed live
+  // against the same standings feed the "Refresh Live Sync" button already uses
+  // successfully (the dedicated /nfl/teams list endpoint turned out to block
+  // cross-origin browser requests with a CORS error, unlike every other ESPN
+  // endpoint this dashboard calls, so this avoids that endpoint entirely rather
+  // than depend on something confirmed broken from a real browser).
+  const TEAM_ESPN_ID = {
+    'Atlanta Falcons':'1','Buffalo Bills':'2','Chicago Bears':'3','Cincinnati Bengals':'4',
+    'Cleveland Browns':'5','Dallas Cowboys':'6','Denver Broncos':'7','Detroit Lions':'8',
+    'Green Bay Packers':'9','Tennessee Titans':'10','Indianapolis Colts':'11','Kansas City Chiefs':'12',
+    'Las Vegas Raiders':'13','Los Angeles Rams':'14','Miami Dolphins':'15','Minnesota Vikings':'16',
+    'New England Patriots':'17','New Orleans Saints':'18','New York Giants':'19','New York Jets':'20',
+    'Philadelphia Eagles':'21','Arizona Cardinals':'22','Pittsburgh Steelers':'23','Los Angeles Chargers':'24',
+    'San Francisco 49ers':'25','Seattle Seahawks':'26','Tampa Bay Buccaneers':'27','Washington Commanders':'28',
+    'Carolina Panthers':'29','Jacksonville Jaguars':'30','Baltimore Ravens':'33','Houston Texans':'34'
+  };
 
   function fetchAllTeamProjections(){
-    return fetchNflTeamIds().then(function(idMap){
-      const jobs = teamNames.map(function(name){
-        const id = idMap[name];
-        if(!id) return Promise.resolve([name, null]);
-        const url = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/' + DATA.season_year + '/teams/' + id + '/projection';
-        return fetch(url, {cache:'no-store'})
-          .then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); })
-          .then(function(j){ return [name, {
-            winDiv: typeof j.chanceToWinDivision === 'number' ? j.chanceToWinDivision : null,
-            projWins: typeof j.projectedWins === 'number' ? j.projectedWins : null,
-            projLosses: typeof j.projectedLosses === 'number' ? j.projectedLosses : null
-          }]; })
-          .catch(function(){ return [name, null]; });
-      });
-      return Promise.all(jobs).then(function(pairs){
-        const out = {};
-        pairs.forEach(function(pair){ out[pair[0]] = pair[1]; });
-        return out;
-      });
+    const jobs = teamNames.map(function(name){
+      const id = TEAM_ESPN_ID[name];
+      if(!id) return Promise.resolve([name, null]); // shouldn't happen -- every real team name is in the table above
+      const url = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/' + DATA.season_year + '/teams/' + id + '/projection';
+      return fetch(url, {cache:'no-store'})
+        .then(function(r){ if(!r.ok) throw new Error('bad status'); return r.json(); })
+        .then(function(j){ return [name, {
+          winDiv: typeof j.chanceToWinDivision === 'number' ? j.chanceToWinDivision : null,
+          projWins: typeof j.projectedWins === 'number' ? j.projectedWins : null,
+          projLosses: typeof j.projectedLosses === 'number' ? j.projectedLosses : null
+        }]; })
+        .catch(function(){ return [name, null]; });
+    });
+    return Promise.all(jobs).then(function(pairs){
+      const out = {};
+      pairs.forEach(function(pair){ out[pair[0]] = pair[1]; });
+      return out;
     });
   }
 
