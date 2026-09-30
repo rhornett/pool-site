@@ -1066,7 +1066,7 @@ footer{
     <section id="team-scores-section">
       <div class="sec-head">
         <h2>Team Scores</h2>
-        <div class="note">Every team's live point total &middot; playoff standing is current seed, not official elimination</div>
+        <div class="note">Every team's live point total &middot; playoff standing is current conference seed (1&ndash;7 playoff position, 8&ndash;10 in the hunt, 11+ long shot), not official elimination</div>
       </div>
       <div id="teamScoresBoard"></div>
     </section>
@@ -1672,9 +1672,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       if(t.stats.confChamp) badges += `<span class="badge conf-champ">Conf Champ</span>`;
       if(t.stats.sbChamp) badges += `<span class="badge sb-champ">Super Bowl Champ</span>`;
       const standing = teamStandingCategory(t.team);
-      if(standing === 'position') badges += `<span class="badge standing-position">Playoff position</span>`;
-      else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt</span>`;
-      else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot</span>`;
+      const seed = teamPlayoffSeed[t.team];
+      const conf = (teamMeta[t.team] || [])[0] || '';
+      const seedTag = (seed != null) ? ` (${conf} #${seed})` : '';
+      if(standing === 'position') badges += `<span class="badge standing-position">Playoff position${seedTag}</span>`;
+      else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt${seedTag}</span>`;
+      else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot${seedTag}</span>`;
       return `
         <div class="team-score-row${live ? ' team-is-live live-' + live.state : ''}">
           <div class="team-rank">${i+1}</div>
