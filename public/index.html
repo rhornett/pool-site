@@ -298,6 +298,26 @@ section[id]{scroll-margin-top:20px;}
 .odds-card{border-left-color: var(--gold-bright);}
 .odds-pct{font-family:'Anton', sans-serif; font-size:22px; color: var(--gold-bright); margin-top:4px;}
 .odds-predicted{font-size:12px; color: rgba(243,236,221,0.5); margin-top:4px;}
+.standings-list{display:flex; flex-direction:column; gap:8px;}
+.standings-row{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:12px 16px;
+  background: rgba(255,255,255,0.03);
+  border:1px solid var(--line);
+  border-left:3px solid var(--gold-bright);
+  border-radius:6px;
+}
+.standings-rank{
+  font-family:'Anton', sans-serif;
+  font-size:20px;
+  color: var(--gold-bright);
+  width:52px;
+  flex:none;
+}
+.standings-name{flex:1; font-weight:700; font-size:15px; min-width:0;}
+.standings-confidence{font-size:12.5px; color: rgba(243,236,221,0.55); flex:none; text-align:right;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
@@ -1007,6 +1027,7 @@ footer{
     <div class="jump-nav">
       <a href="#live-status-section">Status</a>
       <a href="#pool-odds-section">Pool Odds</a>
+      <a href="#predicted-standings-section">Predicted Standings</a>
       <a href="#highlights-section">Highlights</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
       <a href="#team-scores-section">Team Scores</a>
@@ -1029,6 +1050,14 @@ footer{
         <div class="note" id="poolOddsNote">Each owner's live chance of winning the whole pool</div>
       </div>
       <div class="highlights-board" id="poolOddsBoard"></div>
+    </section>
+
+    <section id="predicted-standings-section">
+      <div class="sec-head">
+        <h2>Predicted Final Standings</h2>
+        <div class="note">Ordered by each owner's average simulated finish, not by who wins outright most often (that's Pool Odds above) &mdash; confidence is how often they land in the top 5 at all</div>
+      </div>
+      <div class="standings-list" id="predictedStandingsBoard"></div>
     </section>
 
     <section id="highlights-section">
@@ -2363,6 +2392,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const entryIds = entriesArg.map(e => e.id);
     const wins = {}; entryIds.forEach(id => wins[id] = 0);
     const scoreSums = {}; entryIds.forEach(id => scoreSums[id] = 0);
+    const rankSums = {}; entryIds.forEach(id => rankSums[id] = 0);
+    const top5Counts = {}; entryIds.forEach(id => top5Counts[id] = 0);
     const teamStats = {}; teamsList.forEach(t => teamStats[t] = {divWins:0, confChamps:0, sbWins:0, playoffWinsTotal:0});
   
     for(let trial = 0; trial < trials; trial++){
@@ -2411,6 +2442,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       teamsList.forEach(t => teamStats[t].playoffWinsTotal += bonusWins[t]);
   
       let best = -Infinity; const bestIds = [];
+      let scored = [];
       entriesArg.forEach(e => {
         let bonus = 0;
         e.teams.forEach(t => {
@@ -2422,19 +2454,34 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         });
         const total = (currentTotalsArg[e.id]||0) + bonus;
         scoreSums[e.id] += total;
+        scored.push({id: e.id, total: total});
         if(total > best + 1e-9){ best = total; bestIds.length = 0; bestIds.push(e.id); }
         else if(Math.abs(total - best) <= 1e-9){ bestIds.push(e.id); }
       });
       const credit = 1/bestIds.length;
       bestIds.forEach(id => wins[id] += credit);
+
+      // Full-field competition-style rank for this trial (ties share a rank; the next
+      // distinct score skips ahead accordingly, same convention used on the leaderboard
+      // elsewhere on this dashboard) -- shuffled first so ties break randomly, not by
+      // whichever entry happened to come first in the array.
+      scored = shuffle(scored).sort((a,b) => b.total - a.total);
+      let rank = 1;
+      for(let i = 0; i < scored.length; i++){
+        if(i > 0 && scored[i].total < scored[i-1].total - 1e-9) rank = i + 1;
+        rankSums[scored[i].id] += rank;
+        if(rank <= 5) top5Counts[scored[i].id]++;
+      }
     }
   
-    const probs = {}, predictedScores = {};
+    const probs = {}, predictedScores = {}, avgRanks = {}, top5Rates = {};
     entryIds.forEach(id => {
       probs[id] = wins[id] / trials;
       predictedScores[id] = scoreSums[id] / trials;
+      avgRanks[id] = rankSums[id] / trials;
+      top5Rates[id] = top5Counts[id] / trials;
     });
-    return {probs, teamStats, predictedScores};
+    return {probs, teamStats, predictedScores, avgRanks, top5Rates};
   }
 
   // A small, fast, deterministic hash (FNV-1a) and seeded PRNG (mulberry32) -- together
@@ -2522,9 +2569,32 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           '<div class="odds-predicted">Predicted final score: ' + predicted + '</div>' +
         '</div>';
       }).join('');
+
+      // Predicted final standings (1st-5th): a different question from "who wins most
+      // often" above -- this orders by each owner's average simulated finishing
+      // position, so it can genuinely disagree with the Pool Odds ranking for owners
+      // whose outcomes are consistently solid rather than occasionally spectacular.
+      const standingsBoard = document.getElementById('predictedStandingsBoard');
+      if(standingsBoard){
+        const byAvgRank = entries.slice().sort(function(a,b){
+          return (result.avgRanks[a.id]||Infinity) - (result.avgRanks[b.id]||Infinity);
+        });
+        const ORDINALS = ['1st','2nd','3rd','4th','5th'];
+        standingsBoard.innerHTML = byAvgRank.slice(0,5).map(function(e, idx){
+          const conf = (result.top5Rates[e.id]||0) * 100;
+          const confDisplay = conf >= 10 ? conf.toFixed(0) : (conf >= 1 ? conf.toFixed(1) : (conf > 0 ? '<1' : '0'));
+          return '<div class="standings-row">' +
+            '<div class="standings-rank">' + ORDINALS[idx] + '</div>' +
+            '<div class="standings-name">' + e.name + '</div>' +
+            '<div class="standings-confidence">' + confDisplay + '% chance of a top-5 finish</div>' +
+          '</div>';
+        }).join('');
+      }
     }).catch(function(){
       if(noteEl) noteEl.textContent = 'Couldn\u2019t load live odds data right now \u2014 try again shortly.';
       board.innerHTML = '<div class="empty-state">Live odds are unavailable right now.</div>';
+      const standingsBoard = document.getElementById('predictedStandingsBoard');
+      if(standingsBoard) standingsBoard.innerHTML = '<div class="empty-state">Live odds are unavailable right now.</div>';
     });
   }
 
