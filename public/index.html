@@ -297,6 +297,7 @@ section[id]{scroll-margin-top:20px;}
 .highlight-detail{font-size:12px; color: rgba(243,236,221,0.55); margin-top:2px;}
 .odds-card{border-left-color: var(--gold-bright);}
 .odds-pct{font-family:'Anton', sans-serif; font-size:22px; color: var(--gold-bright); margin-top:4px;}
+.odds-predicted{font-size:12px; color: rgba(243,236,221,0.5); margin-top:4px;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
@@ -2361,6 +2362,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   
     const entryIds = entriesArg.map(e => e.id);
     const wins = {}; entryIds.forEach(id => wins[id] = 0);
+    const scoreSums = {}; entryIds.forEach(id => scoreSums[id] = 0);
     const teamStats = {}; teamsList.forEach(t => teamStats[t] = {divWins:0, confChamps:0, sbWins:0, playoffWinsTotal:0});
   
     for(let trial = 0; trial < trials; trial++){
@@ -2419,6 +2421,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           if(sbWinner === team) bonus += 10;
         });
         const total = (currentTotalsArg[e.id]||0) + bonus;
+        scoreSums[e.id] += total;
         if(total > best + 1e-9){ best = total; bestIds.length = 0; bestIds.push(e.id); }
         else if(Math.abs(total - best) <= 1e-9){ bestIds.push(e.id); }
       });
@@ -2426,9 +2429,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       bestIds.forEach(id => wins[id] += credit);
     }
   
-    const probs = {};
-    entryIds.forEach(id => probs[id] = wins[id] / trials);
-    return {probs, teamStats};
+    const probs = {}, predictedScores = {};
+    entryIds.forEach(id => {
+      probs[id] = wins[id] / trials;
+      predictedScores[id] = scoreSums[id] / trials;
+    });
+    return {probs, teamStats, predictedScores};
   }
 
   // A small, fast, deterministic hash (FNV-1a) and seeded PRNG (mulberry32) -- together
@@ -2508,10 +2514,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       }
 
       board.innerHTML = top5.map(function(e){
+        const predicted = Math.round(result.predictedScores[e.id] || 0);
         return '<div class="highlight-card odds-card">' +
           '<div class="highlight-head"><span class="highlight-icon">\uD83C\uDFC6</span><span class="highlight-label">Pool win odds</span></div>' +
           '<div class="highlight-names">' + e.name + '</div>' +
           '<div class="highlight-detail odds-pct">' + fmtOddsPct(e.id) + '%</div>' +
+          '<div class="odds-predicted">Predicted final score: ' + predicted + '</div>' +
         '</div>';
       }).join('');
     }).catch(function(){
