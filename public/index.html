@@ -2431,6 +2431,29 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     return {probs, teamStats};
   }
 
+  // A small, fast, deterministic hash (FNV-1a) and seeded PRNG (mulberry32) -- together
+  // these let the simulation below be reproducible: the SAME real inputs (team odds,
+  // current scores) always produce the SAME result, rather than fresh random noise on
+  // every refresh. When the real inputs actually change, the seed changes too, and the
+  // simulation naturally updates.
+  function hashSeed(str){
+    let h = 0x811c9dc5;
+    for(let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+  }
+  function mulberry32(seed){
+    let a = seed >>> 0;
+    return function(){
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
   function renderPoolOdds(){
     const board = document.getElementById('poolOddsBoard');
     const noteEl = document.getElementById('poolOddsNote');
@@ -2444,7 +2467,21 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     fetchAllTeamProjections().then(function(projections){
       const currentTotals = {};
       lastOwnerScores.forEach(function(o){ currentTotals[o.id] = o.total; });
-      const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 4000);
+
+      // Build the seed purely from the real, comparable inputs (rounded, so harmless
+      // floating-point noise doesn't spuriously change it) -- identical real data always
+      // yields an identical seed, and therefore an identical simulated result.
+      const seedParts = [];
+      teamNames.forEach(function(t){
+        const p = projections[t] || {};
+        seedParts.push(t + ':' + (p.winDiv||0).toFixed(4) + ':' + (p.projWins||0).toFixed(2) + ':' + (p.projLosses||0).toFixed(2));
+      });
+      entries.forEach(function(e){ seedParts.push(e.id + ':' + (currentTotals[e.id]||0)); });
+      const rng = mulberry32(hashSeed(seedParts.join('|')));
+
+      // More trials than the earlier default, since a fixed seed no longer benefits from
+      // repeat page loads averaging out any single run's statistical noise.
+      const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 20000, rng);
 
       function fmtOddsPct(id){
         const pct = (result.probs[id] || 0) * 100;
