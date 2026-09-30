@@ -998,6 +998,7 @@ footer{
 
   <nav class="tab-nav" id="tabNav">
     <button class="tab-btn active" data-tab="live">Live Scoreboard</button>
+    <button class="tab-btn" data-tab="teamscores">Team Scores</button>
     <button class="tab-btn" data-tab="insights">Insights</button>
     <button class="tab-btn" data-tab="overview">Pool Overview</button>
   </nav>
@@ -1010,7 +1011,6 @@ footer{
       <a href="#predicted-standings-section">Predicted Standings</a>
       <a href="#highlights-section">Highlights</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
-      <a href="#team-scores-section">Team Scores</a>
     </div>
 
     <div class="live-status-bar" id="live-status-section">
@@ -1063,6 +1063,10 @@ footer{
       <div id="ownerLeaderboard"></div>
     </section>
 
+  </div><!-- /tab-live -->
+
+  <div class="tab-pane" id="tab-teamscores" style="display:none;">
+
     <section id="team-scores-section">
       <div class="sec-head">
         <h2>Team Scores</h2>
@@ -1071,7 +1075,7 @@ footer{
       <div id="teamScoresBoard"></div>
     </section>
 
-  </div><!-- /tab-live -->
+  </div><!-- /tab-teamscores -->
 
   <div class="tab-pane" id="tab-insights" style="display:none;">
 
@@ -1679,8 +1683,9 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       // conference's four division winners, and 5-7 are always wild cards -- a fixed
       // NFL seeding rule, not something that needs separate data to work out.
       if(standing === 'position'){
-        const label = (seed <= 4) ? 'Division leader' : 'Wild card';
-        badges += `<span class="badge standing-position">${label}${seedTag}</span>`;
+        const div = (teamMeta[t.team] || [])[1] || '';
+        const label = (seed <= 4) ? `${conf} ${div} Division Leader (#${seed})` : `Wild card${seedTag}`;
+        badges += `<span class="badge standing-position">${label}</span>`;
       }
       else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt${seedTag}</span>`;
       else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot${seedTag}</span>`;
@@ -3129,6 +3134,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       const tab = btn.getAttribute('data-tab');
       document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
       document.getElementById('tab-live').style.display = tab === 'live' ? '' : 'none';
+      document.getElementById('tab-teamscores').style.display = tab === 'teamscores' ? '' : 'none';
       document.getElementById('tab-insights').style.display = tab === 'insights' ? '' : 'none';
     });
   });
