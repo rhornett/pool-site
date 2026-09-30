@@ -1066,7 +1066,7 @@ footer{
     <section id="team-scores-section">
       <div class="sec-head">
         <h2>Team Scores</h2>
-        <div class="note">Every team's live point total &middot; playoff standing is current conference seed (1&ndash;7 playoff position, 8&ndash;10 in the hunt, 11+ long shot), not official elimination</div>
+        <div class="note">Every team's live point total &middot; playoff standing is current conference seed (1&ndash;4 division leader, 5&ndash;7 wild card, 8&ndash;10 in the hunt, 11+ long shot), not official elimination</div>
       </div>
       <div id="teamScoresBoard"></div>
     </section>
@@ -1675,7 +1675,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       const seed = teamPlayoffSeed[t.team];
       const conf = (teamMeta[t.team] || [])[0] || '';
       const seedTag = (seed != null) ? ` (${conf} #${seed})` : '';
-      if(standing === 'position') badges += `<span class="badge standing-position">Playoff position${seedTag}</span>`;
+      // Within "playoff position" (seed 1-7), the top 4 seeds are always that
+      // conference's four division winners, and 5-7 are always wild cards -- a fixed
+      // NFL seeding rule, not something that needs separate data to work out.
+      if(standing === 'position'){
+        const label = (seed <= 4) ? 'Division leader' : 'Wild card';
+        badges += `<span class="badge standing-position">${label}${seedTag}</span>`;
+      }
       else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt${seedTag}</span>`;
       else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot${seedTag}</span>`;
       return `
