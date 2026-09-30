@@ -298,6 +298,65 @@ section[id]{scroll-margin-top:20px;}
 .odds-card{border-left-color: var(--gold-bright);}
 .odds-pct{font-family:'Anton', sans-serif; font-size:22px; color: var(--gold-bright); margin-top:4px;}
 .odds-predicted{font-size:12px; color: rgba(243,236,221,0.5); margin-top:4px;}
+.bracket-wrap{display:flex; flex-wrap:wrap; gap:28px;}
+.bracket-conf{flex:1 1 380px; min-width:280px;}
+.bracket-conf-title{
+  font-family:'Anton', sans-serif;
+  font-size:20px;
+  color: var(--gold-bright);
+  margin-bottom:12px;
+}
+.bracket-round{margin-bottom:16px;}
+.bracket-round-label{
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color: rgba(243,236,221,0.5);
+  margin-bottom:6px;
+}
+.bracket-matchup{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background: rgba(255,255,255,0.03);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:9px 12px;
+  margin-bottom:6px;
+  font-size:14px;
+  flex-wrap:wrap;
+}
+.bracket-bye-row{border-left:3px solid var(--gold-bright);}
+.bracket-seed{
+  font-family:'Anton', sans-serif;
+  font-size:12px;
+  color: rgba(243,236,221,0.4);
+  flex:none;
+  width:14px;
+}
+.bracket-team{display:flex; align-items:center; gap:6px; font-weight:600;}
+.bracket-team-unit{display:inline-flex; align-items:center; gap:6px;}
+.bracket-team-tbd{color: rgba(243,236,221,0.35); font-style:italic; font-weight:400;}
+.bracket-abbr{color: var(--gold-bright); font-size:12px;}
+.bracket-vs{color: rgba(243,236,221,0.4); font-size:12px; margin:0 4px;}
+.bracket-tbd{
+  font-size:13px;
+  color: rgba(243,236,221,0.35);
+  font-style:italic;
+  padding:9px 12px;
+  border:1px dashed var(--line);
+  border-radius:6px;
+}
+.bracket-sb{
+  margin-top:8px;
+  padding:16px;
+  text-align:center;
+  border:1px dashed var(--gold);
+  border-radius:8px;
+  background: rgba(240,200,105,0.06);
+}
+.bracket-sb .bracket-tbd{border:none; padding:4px 0 0;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
@@ -1067,12 +1126,25 @@ footer{
 
   <div class="tab-pane" id="tab-teamscores" style="display:none;">
 
+    <div class="jump-nav">
+      <a href="#team-scores-section">Team Scores</a>
+      <a href="#playoff-bracket-section">Playoff Bracket</a>
+    </div>
+
     <section id="team-scores-section">
       <div class="sec-head">
         <h2>Team Scores</h2>
         <div class="note">Every team's live point total &middot; playoff standing is current conference seed (1&ndash;4 division leader, 5&ndash;7 wild card, 8&ndash;10 in the hunt, 11+ long shot), not official elimination</div>
       </div>
       <div id="teamScoresBoard"></div>
+    </section>
+
+    <section id="playoff-bracket-section">
+      <div class="sec-head">
+        <h2>Playoff Bracket</h2>
+        <div class="note">If the playoffs started today &mdash; real, live seeds fill the wild-card round; later rounds show once those games are actually played</div>
+      </div>
+      <div id="playoffBracketBoard"></div>
     </section>
 
   </div><!-- /tab-teamscores -->
@@ -1646,6 +1718,64 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     return 'longshot';
   }
 
+  // ---------- PLAYOFF BRACKET (current seeding, not real results yet) ----------
+  // The regular season isn't over, so there's no real bracket to show yet -- this is
+  // "if the playoffs started today": each conference's real, live top-7 seeds fill in
+  // the wild-card round exactly as the current standings would seed them (1-seed gets
+  // a bye; 2v7, 3v6, 4v5). Later rounds are genuinely unknown until those games are
+  // actually played, so they stay labeled TBD rather than guessed at here (the Pool
+  // Odds section above already covers "who's likely to advance" as a simulation).
+  function renderPlayoffBracket(){
+    const board = document.getElementById('playoffBracketBoard');
+    if(!board) return;
+
+    function teamChip(team, seed){
+      const seedHtml = (seed != null) ? `<span class="bracket-seed">${seed}</span>` : '';
+      if(!team) return `<span class="bracket-team-unit">${seedHtml}<span class="bracket-team bracket-team-tbd">TBD</span></span>`;
+      const accent = teamAccentColor(team);
+      const style = accent ? ` style="color:${accent}"` : '';
+      return `<span class="bracket-team-unit">${seedHtml}<span class="bracket-team"><b class="bracket-abbr"${style}>${teamAbbr[team]||''}</b>${team}</span></span>`;
+    }
+
+    const confsHtml = ['AFC','NFC'].map(function(conf){
+      const seeded = teamNames.filter(function(t){
+        return teamMeta[t] && teamMeta[t][0] === conf && teamPlayoffSeed[t] != null && teamPlayoffSeed[t] <= 7;
+      });
+      if(seeded.length < 7){
+        return `<div class="bracket-conf"><div class="bracket-conf-title">${conf}</div><div class="bracket-tbd">Seeding isn't available yet.</div></div>`;
+      }
+      const bySeed = {};
+      seeded.forEach(function(t){ bySeed[teamPlayoffSeed[t]] = t; });
+
+      return `
+        <div class="bracket-conf">
+          <div class="bracket-conf-title">${conf}</div>
+          <div class="bracket-round">
+            <div class="bracket-round-label">1 Seed &mdash; Bye</div>
+            <div class="bracket-matchup bracket-bye-row">${teamChip(bySeed[1], 1)}</div>
+          </div>
+          <div class="bracket-round">
+            <div class="bracket-round-label">Wild Card</div>
+            <div class="bracket-matchup">${teamChip(bySeed[2], 2)}<span class="bracket-vs">vs</span>${teamChip(bySeed[7], 7)}</div>
+            <div class="bracket-matchup">${teamChip(bySeed[3], 3)}<span class="bracket-vs">vs</span>${teamChip(bySeed[6], 6)}</div>
+            <div class="bracket-matchup">${teamChip(bySeed[4], 4)}<span class="bracket-vs">vs</span>${teamChip(bySeed[5], 5)}</div>
+          </div>
+          <div class="bracket-round">
+            <div class="bracket-round-label">Divisional</div>
+            <div class="bracket-tbd">Winners TBD</div>
+          </div>
+          <div class="bracket-round">
+            <div class="bracket-round-label">Conference Championship</div>
+            <div class="bracket-tbd">Winners TBD</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    board.innerHTML = `<div class="bracket-wrap">${confsHtml}</div>` +
+      `<div class="bracket-sb"><div class="bracket-round-label">Super Bowl</div><div class="bracket-tbd">Winners TBD</div></div>`;
+  }
+
   function computeTeamScore(t, stats){
     const s = stats[t];
     let pts = s.wins * 1;
@@ -1703,6 +1833,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     teamScores.forEach(t => teamScoreMap[t.team] = t.score);
     lastTeamScoreMap = teamScoreMap;
 
+    renderPlayoffBracket();
     renderBestPossible(teamScoreMap);
 
     const ownerScores = entries.map(e => {
