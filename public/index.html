@@ -1005,6 +1005,7 @@ footer{
 
     <div class="jump-nav">
       <a href="#live-status-section">Status</a>
+      <a href="#pool-odds-section">Pool Odds</a>
       <a href="#highlights-section">Highlights</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
       <a href="#team-scores-section">Team Scores</a>
@@ -1020,6 +1021,14 @@ footer{
       <button id="downloadSnapshotBtn" class="live-btn">Download This Week's Snapshot</button>
       <button id="resetStandingsBtn" class="live-btn ghost">Reset to Snapshot</button>
     </div>
+
+    <section id="pool-odds-section">
+      <div class="sec-head">
+        <h2>Pool Odds</h2>
+        <div class="note" id="poolOddsNote">Each owner's live chance of winning the whole pool</div>
+      </div>
+      <div class="highlights-board" id="poolOddsBoard"></div>
+    </section>
 
     <section id="highlights-section">
       <div class="sec-head">
@@ -1060,7 +1069,6 @@ footer{
       <a href="#payout-section">Payout</a>
       <a href="#h2h-section">Head-to-Head</a>
       <a href="#score-history-section">Score History</a>
-      <a href="#pool-odds-section">Pool Odds</a>
       <a href="#best-possible-section">Best Possible Score</a>
     </div>
 
@@ -1091,14 +1099,6 @@ footer{
         <div class="note">Top 5 owners' scores over time &mdash; builds automatically, nothing to save</div>
       </div>
       <div id="scoreHistoryChart"></div>
-    </section>
-
-    <section id="pool-odds-section">
-      <div class="sec-head">
-        <h2>Pool Odds</h2>
-        <div class="note" id="poolOddsNote">Each owner's live chance of winning the whole pool</div>
-      </div>
-      <div class="highlights-board" id="poolOddsBoard"></div>
     </section>
 
     <section id="best-possible-section">
