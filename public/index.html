@@ -298,26 +298,6 @@ section[id]{scroll-margin-top:20px;}
 .odds-card{border-left-color: var(--gold-bright);}
 .odds-pct{font-family:'Anton', sans-serif; font-size:22px; color: var(--gold-bright); margin-top:4px;}
 .odds-predicted{font-size:12px; color: rgba(243,236,221,0.5); margin-top:4px;}
-.standings-list{display:flex; flex-direction:column; gap:8px;}
-.standings-row{
-  display:flex;
-  align-items:center;
-  gap:16px;
-  padding:12px 16px;
-  background: rgba(255,255,255,0.03);
-  border:1px solid var(--line);
-  border-left:3px solid var(--gold-bright);
-  border-radius:6px;
-}
-.standings-rank{
-  font-family:'Anton', sans-serif;
-  font-size:20px;
-  color: var(--gold-bright);
-  width:52px;
-  flex:none;
-}
-.standings-name{flex:1; font-weight:700; font-size:15px; min-width:0;}
-.standings-confidence{font-size:12.5px; color: rgba(243,236,221,0.55); flex:none; text-align:right;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
@@ -1057,7 +1037,7 @@ footer{
         <h2>Predicted Final Standings</h2>
         <div class="note">Ordered by each owner's average simulated finish, not by who wins outright most often (that's Pool Odds above) &mdash; confidence is how often they land in the top 5 at all</div>
       </div>
-      <div class="standings-list" id="predictedStandingsBoard"></div>
+      <div class="highlights-board" id="predictedStandingsBoard"></div>
     </section>
 
     <section id="highlights-section">
@@ -2579,14 +2559,16 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         const byAvgRank = entries.slice().sort(function(a,b){
           return (result.avgRanks[a.id]||Infinity) - (result.avgRanks[b.id]||Infinity);
         });
-        const ORDINALS = ['1st','2nd','3rd','4th','5th'];
+        const ORDINALS = ['1st', '2nd', '3rd', '4th', '5th'];
+        const ORDINAL_ICON = '\uD83C\uDFC5'; // sports medal -- one consistent icon, same convention as Pool Odds' trophy
         standingsBoard.innerHTML = byAvgRank.slice(0,5).map(function(e, idx){
           const conf = (result.top5Rates[e.id]||0) * 100;
           const confDisplay = conf >= 10 ? conf.toFixed(0) : (conf >= 1 ? conf.toFixed(1) : (conf > 0 ? '<1' : '0'));
-          return '<div class="standings-row">' +
-            '<div class="standings-rank">' + ORDINALS[idx] + '</div>' +
-            '<div class="standings-name">' + e.name + '</div>' +
-            '<div class="standings-confidence">' + confDisplay + '% chance of a top-5 finish</div>' +
+          return '<div class="highlight-card odds-card">' +
+            '<div class="highlight-head"><span class="highlight-icon">' + ORDINAL_ICON + '</span><span class="highlight-label">' + ORDINALS[idx] + ' place</span></div>' +
+            '<div class="highlight-names">' + e.name + '</div>' +
+            '<div class="highlight-detail odds-pct">' + confDisplay + '%</div>' +
+            '<div class="odds-predicted">Chance of a top-5 finish</div>' +
           '</div>';
         }).join('');
       }
