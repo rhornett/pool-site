@@ -1080,32 +1080,11 @@ footer{
   <div class="tab-pane" id="tab-insights" style="display:none;">
 
     <div class="jump-nav">
-      <a href="#payout-section">Payout</a>
-      <a href="#h2h-section">Head-to-Head</a>
       <a href="#score-history-section">Score History</a>
       <a href="#best-possible-section">Best Possible Score</a>
+      <a href="#payout-section">Payout</a>
+      <a href="#h2h-section">Head-to-Head</a>
     </div>
-
-    <section id="payout-section">
-      <div class="sec-head">
-        <h2>Payout Breakdown</h2>
-        <div class="note">60% / 30% / 10% split &mdash; ties share their combined slots evenly</div>
-      </div>
-      <div id="payoutBreakdown" class="payout-breakdown"></div>
-    </section>
-
-    <section id="h2h-section">
-      <div class="sec-head">
-        <h2>Head-to-Head</h2>
-        <div class="note">Compare any two entries side by side</div>
-      </div>
-      <div class="h2h-toolbar">
-        <select id="h2hSelectA"></select>
-        <span class="h2h-vs">vs</span>
-        <select id="h2hSelectB"></select>
-      </div>
-      <div id="h2hResult"></div>
-    </section>
 
     <section id="score-history-section">
       <div class="sec-head">
@@ -1128,6 +1107,27 @@ footer{
         </div>
       </div>
       <div id="bestPossibleBoard" class="best-possible-board"></div>
+    </section>
+
+    <section id="payout-section">
+      <div class="sec-head">
+        <h2>Payout Breakdown</h2>
+        <div class="note">60% / 30% / 10% split &mdash; ties share their combined slots evenly</div>
+      </div>
+      <div id="payoutBreakdown" class="payout-breakdown"></div>
+    </section>
+
+    <section id="h2h-section">
+      <div class="sec-head">
+        <h2>Head-to-Head</h2>
+        <div class="note">Compare any two entries side by side</div>
+      </div>
+      <div class="h2h-toolbar">
+        <select id="h2hSelectA"></select>
+        <span class="h2h-vs">vs</span>
+        <select id="h2hSelectB"></select>
+      </div>
+      <div id="h2hResult"></div>
     </section>
 
   </div><!-- /tab-insights -->
@@ -1977,7 +1977,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     ).join('');
     selA.innerHTML = optionsHtml;
     selB.innerHTML = optionsHtml;
-    if(sortedEntries.length > 1){
+    // Default to the current top 2 owners on the leaderboard (by score), not
+    // whichever two names happen to sort first alphabetically.
+    if(lastOwnerScores.length > 1){
+      selA.value = lastOwnerScores[0].id;
+      selB.value = lastOwnerScores[1].id;
+    } else if(sortedEntries.length > 1){
       selA.value = sortedEntries[0].id;
       selB.value = sortedEntries[1].id;
     }
