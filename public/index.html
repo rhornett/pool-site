@@ -2257,8 +2257,10 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         ? ` style="${borderStyle}background:rgba(240,200,105,0.28);border-top:1px solid var(--gold);border-right:1px solid var(--gold);border-bottom:1px solid var(--gold);box-shadow:0 0 0 1px rgba(240,200,105,0.3);"`
         : (borderStyle ? ` style="${borderStyle}"` : '');
       const abbrStyle = accent ? ` style="color:${accent}"` : '';
+      const live = liveGameInfo[t];
+      const liveTag = live ? ` <a class="chip-live live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF ${live.myScore}-${live.oppScore}</a>` : '';
       const sharedTag = isShared ? ' <span class="chip-shared-tag">SHARED</span>' : '';
-      return `<span class="owner-detail-chip${isShared ? ' shared' : ''}"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${lastTeamScoreMap[t]||0}</b>${sharedTag}</span>`;
+      return `<span class="owner-detail-chip${isShared ? ' shared' : ''}"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${lastTeamScoreMap[t]||0}</b>${liveTag}${sharedTag}</span>`;
     }).join('');
 
     const diff = totalA - totalB;
