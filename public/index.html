@@ -580,6 +580,12 @@ section[id]{scroll-margin-top:20px;}
   border-radius:2px;
   display:inline-block;
 }
+.history-swatch-dashed{
+  background: transparent !important;
+  border:1.5px dashed var(--cream);
+  width:9px;
+  height:9px;
+}
 .history-hit{cursor:pointer;}
 .history-detail{
   display:flex;
@@ -2239,14 +2245,17 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           entries.forEach(function(e){
             totals[e.id] = e.teams.reduce(function(s,t){ return s + (cumulativeWins[t.team] || 0); }, 0);
           });
-          byWeek.push({ week: idx + 1, totals: totals });
+          // Keep a snapshot of each team's own score at this checkpoint too (not just
+          // owners' totals) -- needed to work out what the Best Possible Score ceiling
+          // would have been at that point in the season.
+          byWeek.push({ week: idx + 1, totals: totals, teamScores: Object.assign({}, cumulativeWins) });
         });
 
         // The current (possibly still in-progress) week: use the live score the
         // rest of the dashboard already shows, including any manual bonuses.
         const currentTotals = {};
         lastOwnerScores.forEach(function(o){ currentTotals[o.id] = o.total; });
-        byWeek.push({ week: currentWeekNumber, totals: currentTotals });
+        byWeek.push({ week: currentWeekNumber, totals: currentTotals, teamScores: Object.assign({}, lastTeamScoreMap) });
 
         weeklyProgression = byWeek;
         return byWeek;
@@ -2750,7 +2759,16 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       points.push({ label: 'Wk ' + wk.week, scores: wk.totals });
     });
 
-    drawHistoryChart(points, topN);
+    // Best Possible Score at each of those same checkpoints -- the $10-budget
+    // ceiling, recomputed from each week's own team scores, not just the current one.
+    const zeroTeamScores = {};
+    teamNames.forEach(function(t){ zeroTeamScores[t] = 0; });
+    const ceiling = [solveBestPossible(teamPrice, zeroTeamScores, 10).totalScore];
+    weeklyProgression.forEach(function(wk){
+      ceiling.push(solveBestPossible(teamPrice, wk.teamScores || {}, 10).totalScore);
+    });
+
+    drawHistoryChart(points, topN, ceiling);
   }
 
   // Points scored each week by every owner, plus the pool average for each week
@@ -2807,7 +2825,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
            '" role="img" aria-label="Points scored each week compared with the pool average">' + bars + '</svg>';
   }
 
-  function drawHistoryChart(points, topN){
+  function drawHistoryChart(points, topN, ceiling){
     const container = document.getElementById('scoreHistoryChart');
     if(!container) return;
     if(points.length < 2){
@@ -2816,11 +2834,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     }
 
     const palette = ['#f0c869','#c85a4a','#3f7db3','#7fbf7f','#b98ad0'];
+    const CEILING_COLOR = '#f3ecdd';
     const w = 760, h = 300, padL = 34, padR = 16, padT = 16, padB = 28;
     const n = points.length;
 
     const allScores = [];
     topN.forEach(o => points.forEach(pt => allScores.push(pt.scores[o.id] || 0)));
+    if(ceiling) ceiling.forEach(v => allScores.push(v || 0));
     const maxScore = Math.max(1, ...allScores);
     const xStep = (w - padL - padR) / Math.max(1, n - 1);
     const yScale = (v) => h - padB - (v / maxScore) * (h - padT - padB);
@@ -2837,6 +2857,14 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     tickIdxs.forEach(i => {
       svg += `<text x="${xScale(i)}" y="${h-8}" text-anchor="middle" font-size="10" fill="rgba(243,236,221,0.4)">${points[i].label}</text>`;
     });
+
+    // The $10-budget ceiling, drawn first (so the real owner lines sit visually on
+    // top of it) and styled distinctly -- dashed, no fill dots -- since it isn't a
+    // competitor, just the most points physically available to spend on that week.
+    if(ceiling){
+      const cpts = points.map((pt,i) => `${xScale(i)},${yScale(ceiling[i] || 0)}`).join(' ');
+      svg += `<polyline points="${cpts}" fill="none" stroke="${CEILING_COLOR}" stroke-width="2" stroke-dasharray="5,4" opacity="0.6" />`;
+    }
 
     topN.forEach((o, idx) => {
       const color = palette[idx % palette.length];
@@ -2862,7 +2890,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
     svg += `</svg>`;
 
-    const legend = topN.map((o,idx) => `<span class="history-legend-item"><span class="history-swatch" style="background:${palette[idx % palette.length]}"></span>${o.name}</span>`).join('');
+    const legend = topN.map((o,idx) => `<span class="history-legend-item"><span class="history-swatch" style="background:${palette[idx % palette.length]}"></span>${o.name}</span>`).join('') +
+      (ceiling ? `<span class="history-legend-item"><span class="history-swatch history-swatch-dashed"></span>Best Possible ($10 budget)</span>` : '');
 
     container.innerHTML = svg + `<div class="history-legend">${legend}</div>` +
       `<div class="history-detail" id="historyDetail"><span class="history-detail-hint">Hover or tap a week to see every owner\u2019s exact score</span></div>`;
@@ -2876,9 +2905,10 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       guideEl.setAttribute('x1', xScale(i));
       guideEl.setAttribute('x2', xScale(i));
       guideEl.setAttribute('opacity', '1');
-      const rows = topN.map((o, idx) => ({name: o.name, score: pt.scores[o.id] || 0, color: palette[idx % palette.length]}))
-        .sort((a,b) => b.score - a.score);
-      const items = rows.map(r => `<span class="history-legend-item"><span class="history-swatch" style="background:${r.color}"></span>${r.name} <b>${r.score}</b></span>`).join('');
+      const rows = topN.map((o, idx) => ({name: o.name, score: pt.scores[o.id] || 0, color: palette[idx % palette.length], dashed: false}));
+      if(ceiling) rows.push({name: 'Best Possible ($10 budget)', score: ceiling[i] || 0, color: CEILING_COLOR, dashed: true});
+      rows.sort((a,b) => b.score - a.score);
+      const items = rows.map(r => `<span class="history-legend-item"><span class="history-swatch${r.dashed ? ' history-swatch-dashed' : ''}" style="background:${r.color}"></span>${r.name} <b>${r.score}</b></span>`).join('');
       detailEl.innerHTML = `<span class="history-detail-week">${pt.label}</span>${items}`;
     }
 
