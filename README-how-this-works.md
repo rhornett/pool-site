@@ -22,7 +22,7 @@ JSON endpoints, fetched straight from the visitor's own browser.
   ```
   public/index.html     → the entire dashboard: HTML + CSS + JS + baked data, all in one file
   public/bonuses.json   → admin-maintained override file for division/playoff/SB winners
-  public/_redirects     → routes /upload.html and /upload to the Netlify-hosted upload page
+  public/_redirects     → routes /upload and /entry-form to their Netlify-hosted pages
   public/entry-form.html → pool entry form (committed, not linked yet; see Pending below)
   public/upload.html    → source of the live upload page that Netlify serves (see below), NOT dead weight
   netlify.toml, netlify/functions/generate-upload-url.js, package.json → the Netlify side of the upload flow
@@ -257,9 +257,10 @@ a new domain, check this first.
   all 116 real entries' totals reprice exactly). It submits via **Netlify
   Forms** (POST to `/`), so it only works when served from Netlify. On
   hornett.org (Cloudflare) that POST gets a 405 and the form shows "Could
-  not submit", so it fails visibly rather than silently. To go live it needs
-  a `_redirects` rule like the upload page's, and Netlify's form email
-  notifications set up.
+  not submit", so it fails visibly rather than silently. `_redirects` now
+  forwards `/entry-form.html` and `/entry-form` to the Netlify copy, like
+  the upload page. Still to do: confirm Netlify builds it, and turn on email
+  notifications for the `pool-entries` form in Netlify's dashboard.
 - **Division winners** need entering into `divisionWinners` in
   `bonuses.json` once officially decided (expected around January). Playoff
   wins, conference and SB champs will fill in automatically from ESPN.
