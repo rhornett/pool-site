@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enter the Pool — Rikki Hornett NFL Owner's Pool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-deep:#0b1e33;
+  --navy:#14304f;
+  --navy-light:#1e3f63;
+  --gold:#d4a24c;
+  --gold-bright:#f0c869;
+  --cream:#f3ecdd;
+  --line: rgba(212,162,76,0.28);
+  --err:#e0665a;
+  --ok:#7fbf7f;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;overflow-x:hidden;}
+body{
+  background: var(--navy-deep);
+  color: var(--cream);
+  font-family:'Barlow', sans-serif;
+  min-height:100vh;
+  padding:32px 20px 80px;
+}
+.wrap{max-width:820px; margin:0 auto;}
+h1{
+  font-family:'Anton', sans-serif;
+  font-size:34px;
+  letter-spacing:0.02em;
+  color: var(--gold-bright);
+  margin:0 0 6px;
+}
+.sub{
+  font-size:15px;
+  color: rgba(243,236,221,0.65);
+  margin:0 0 28px;
+  line-height:1.5;
+}
+.card{
+  background: var(--navy);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:24px 24px 28px;
+  margin-bottom:20px;
+}
+label{
+  display:block;
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:13px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color: rgba(243,236,221,0.7);
+  margin-bottom:6px;
+}
+input[type=text], input[type=email]{
+  width:100%;
+  padding:11px 13px;
+  border-radius:5px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--cream);
+  font-family:'Barlow', sans-serif;
+  font-size:14.5px;
+}
+input:focus{outline:none; border-color:var(--gold);}
+.field-row{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:4px;}
+.field-row > div{flex:1; min-width:220px;}
+.field{margin-bottom:18px;}
+.field-error{
+  display:none;
+  font-size:12.5px;
+  color: var(--err);
+  margin-top:6px;
+}
+.field-error.show{display:block;}
+input#entryEmailConfirm.match-ok{border-color: var(--ok);}
+input#entryEmailConfirm.match-bad{border-color: var(--err);}
+
+.budget-bar{
+  position:sticky;
+  top:0;
+  z-index:10;
+  background: var(--navy-deep);
+  border-bottom:1px solid var(--line);
+  padding:14px 0;
+  margin-bottom:8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.budget-label{font-family:'Barlow Condensed', sans-serif; font-size:14px; color:rgba(243,236,221,0.6);}
+.budget-amount{
+  font-family:'Anton', sans-serif;
+  font-size:26px;
+}
+.budget-amount.ok{color: var(--ok);}
+.budget-amount.over{color: var(--err);}
+.budget-note{font-size:12.5px; color:rgba(243,236,221,0.45);}
+
+.div-group{margin-bottom:22px;}
+.div-group-title{
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:14px;
+  font-weight:600;
+  letter-spacing:0.05em;
+  color: rgba(243,236,221,0.55);
+  margin-bottom:10px;
+  padding-bottom:6px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.conf-heading{
+  font-family:'Barlow Condensed', sans-serif;
+  font-size:17px;
+  font-weight:700;
+  letter-spacing:0.04em;
+  margin:24px 0 10px;
+}
+.conf-heading.afc{color:#c85a4a;}
+.conf-heading.nfc{color:#3f7db3;}
+.team-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap:8px;
+}
+.team-chip{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 12px;
+  border-radius:5px;
+  background: rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  cursor:pointer;
+  transition: all .12s ease;
+  user-select:none;
+}
+.team-chip:hover{background: rgba(255,255,255,0.07);}
+.team-chip.checked{background: rgba(240,200,105,0.14); border-color: var(--gold);}
+.team-chip input{display:none;}
+.team-chip .abbr{
+  font-family:'Barlow Condensed', sans-serif;
+  font-weight:700;
+  font-size:11.5px;
+  padding:2px 6px;
+  border-radius:3px;
+  flex:none;
+}
+.team-chip .name{flex:1; font-size:13.5px; text-transform:none; letter-spacing:normal;}
+.team-chip .price{font-size:12.5px; color: rgba(243,236,221,0.5); flex:none;}
+.team-chip.checked .price{color: var(--gold-bright); font-weight:700;}
+
+button[type=submit]{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:5px;
+  background: var(--gold);
+  color: var(--navy-deep);
+  font-family:'Barlow Condensed', sans-serif;
+  font-weight:700;
+  font-size:16px;
+  letter-spacing:0.03em;
+  text-transform:uppercase;
+  cursor:pointer;
+  margin-top:8px;
+}
+button[type=submit]:hover:not(:disabled){background: var(--gold-bright);}
+button[type=submit]:disabled{opacity:0.4; cursor:not-allowed;}
+
+.status-msg{
+  margin-top:16px;
+  padding:12px 14px;
+  border-radius:5px;
+  font-size:14px;
+  display:none;
+}
+.status-msg.ok{display:block; background: rgba(127,191,127,0.12); color: var(--ok); border:1px solid rgba(127,191,127,0.3);}
+.status-msg.err{display:block; background: rgba(224,102,90,0.12); color: var(--err); border:1px solid rgba(224,102,90,0.3);}
+
+.footer-note{
+  margin-top:20px;
+  font-size:12.5px;
+  color: rgba(243,236,221,0.4);
+  text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>ENTER THE POOL</h1>
+  <p class="sub">Rikki Hornett NFL Owner's Pool — pick your teams below. Each line costs a flat $50; the numbers next to each team are a $10 selection budget, not extra money owed.</p>
+
+  <!-- Hidden static form so Netlify's build-time bot detects it and enables email
+       notifications + CSV export. Never shown or submitted directly by a visitor --
+       the JS below submits to it via fetch() after validating the entry. -->
+  <form name="pool-entries" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="text" name="name">
+    <input type="email" name="email">
+    <input type="text" name="teams">
+    <input type="text" name="total">
+  </form>
+
+  <form id="entryForm">
+    <div class="card">
+      <div class="field">
+        <label for="entryName">Your name</label>
+        <input type="text" id="entryName" placeholder="e.g. Jane Smith" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="entryEmail">Email</label>
+          <input type="email" id="entryEmail" placeholder="e.g. jane@example.com" required>
+        </div>
+        <div class="field">
+          <label for="entryEmailConfirm">Confirm email</label>
+          <input type="email" id="entryEmailConfirm" placeholder="Type it again" required autocomplete="off">
+          <div class="field-error" id="emailMatchError">Emails don&rsquo;t match yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="budget-bar">
+      <div>
+        <div class="budget-label">Selection budget used</div>
+        <div class="budget-note">Max $10.00 per entry &middot; entry fee is a separate flat $50/line</div>
+      </div>
+      <div class="budget-amount ok" id="budgetAmount">$0.00 / $10.00</div>
+    </div>
+
+    <div class="card" id="teamsCard"></div>
+
+    <button type="submit" id="submitBtn" disabled>Submit Entry</button>
+    <div class="status-msg" id="statusMsg"></div>
+  </form>
+
+  <div class="footer-note">One entry per submission &mdash; want more than one line? Just submit this form again.</div>
+</div>
+
+<script>
+(function(){
+  const TEAM_PRICE = {
+    "Baltimore Ravens": 1.75, "Cincinnati Bengals": 1.25, "Dallas Cowboys": 1.00, "Denver Broncos": 1.50,
+    "Jacksonville Jaguars": 1.25, "Los Angeles Rams": 2.00, "New England Patriots": 1.25, "Buffalo Bills": 2.00,
+    "Philadelphia Eagles": 1.50, "Detroit Lions": 1.50, "Green Bay Packers": 1.50, "Kansas City Chiefs": 1.75,
+    "San Francisco 49ers": 1.25, "Seattle Seahawks": 1.75, "Chicago Bears": 1.25, "Houston Texans": 1.25,
+    "Minnesota Vikings": 1.00, "Pittsburgh Steelers": 0.75, "Tampa Bay Buccaneers": 1.00, "Tennessee Titans": 0.50,
+    "Carolina Panthers": 0.75, "Indianapolis Colts": 0.75, "New Orleans Saints": 0.75, "New York Jets": 0.50,
+    "Washington Commanders": 0.75, "Las Vegas Raiders": 0.50, "Los Angeles Chargers": 1.75, "Arizona Cardinals": 0.50,
+    "Cleveland Browns": 0.50, "Miami Dolphins": 0.50, "New York Giants": 0.75, "Atlanta Falcons": 1.00
+  };
+  const TEAM_ABBR = {
+    "Arizona Cardinals":"ARI","Atlanta Falcons":"ATL","Baltimore Ravens":"BAL","Buffalo Bills":"BUF",
+    "Carolina Panthers":"CAR","Chicago Bears":"CHI","Cincinnati Bengals":"CIN","Cleveland Browns":"CLE",
+    "Dallas Cowboys":"DAL","Denver Broncos":"DEN","Detroit Lions":"DET","Green Bay Packers":"GB",
+    "Houston Texans":"HOU","Indianapolis Colts":"IND","Jacksonville Jaguars":"JAX","Kansas City Chiefs":"KC",
+    "Las Vegas Raiders":"LV","Los Angeles Chargers":"LAC","Los Angeles Rams":"LAR","Miami Dolphins":"MIA",
+    "Minnesota Vikings":"MIN","New England Patriots":"NE","New Orleans Saints":"NO","New York Giants":"NYG",
+    "New York Jets":"NYJ","Philadelphia Eagles":"PHI","Pittsburgh Steelers":"PIT","San Francisco 49ers":"SF",
+    "Seattle Seahawks":"SEA","Tampa Bay Buccaneers":"TB","Tennessee Titans":"TEN","Washington Commanders":"WAS"
+  };
+  const TEAM_META = {
+    "Arizona Cardinals":["NFC","West"],"Atlanta Falcons":["NFC","South"],"Baltimore Ravens":["AFC","North"],
+    "Buffalo Bills":["AFC","East"],"Carolina Panthers":["NFC","South"],"Chicago Bears":["NFC","North"],
+    "Cincinnati Bengals":["AFC","North"],"Cleveland Browns":["AFC","North"],"Dallas Cowboys":["NFC","East"],
+    "Denver Broncos":["AFC","West"],"Detroit Lions":["NFC","North"],"Green Bay Packers":["NFC","North"],
+    "Houston Texans":["AFC","South"],"Indianapolis Colts":["AFC","South"],"Jacksonville Jaguars":["AFC","South"],
+    "Kansas City Chiefs":["AFC","West"],"Las Vegas Raiders":["AFC","West"],"Los Angeles Chargers":["AFC","West"],
+    "Los Angeles Rams":["NFC","West"],"Miami Dolphins":["AFC","East"],"Minnesota Vikings":["NFC","North"],
+    "New England Patriots":["AFC","East"],"New Orleans Saints":["NFC","South"],"New York Giants":["NFC","East"],
+    "New York Jets":["AFC","East"],"Philadelphia Eagles":["NFC","East"],"Pittsburgh Steelers":["AFC","North"],
+    "San Francisco 49ers":["NFC","West"],"Seattle Seahawks":["NFC","West"],"Tampa Bay Buccaneers":["NFC","South"],
+    "Tennessee Titans":["AFC","South"],"Washington Commanders":["NFC","East"]
+  };
+  const TEAM_COLORS = {
+    'Arizona Cardinals': ['97233F','000000'], 'Atlanta Falcons': ['A71930','000000'],
+    'Baltimore Ravens': ['241773','000000'], 'Buffalo Bills': ['00338D','C60C30'],
+    'Carolina Panthers': ['0085CA','101820'], 'Chicago Bears': ['0B162A','C83803'],
+    'Cincinnati Bengals': ['FB4F14','000000'], 'Cleveland Browns': ['311D00','FF3C00'],
+    'Dallas Cowboys': ['041E42','869397'], 'Denver Broncos': ['FB4F14','002244'],
+    'Detroit Lions': ['0076B6','B0B7BC'], 'Green Bay Packers': ['203731','FFB612'],
+    'Houston Texans': ['03202F','A71930'], 'Indianapolis Colts': ['002C5F','A2AAAD'],
+    'Jacksonville Jaguars': ['101820','D7A22A'], 'Kansas City Chiefs': ['E31837','FFB612'],
+    'Las Vegas Raiders': ['000000','A5ACAF'], 'Los Angeles Chargers': ['0080C6','FFC20E'],
+    'Los Angeles Rams': ['003594','FFD100'], 'Miami Dolphins': ['008E97','FC4C02'],
+    'Minnesota Vikings': ['4F2683','FFC62F'], 'New England Patriots': ['002244','C60C30'],
+    'New Orleans Saints': ['D3BC8D','101820'], 'New York Giants': ['0B2265','A71930'],
+    'New York Jets': ['125740','FFFFFF'], 'Philadelphia Eagles': ['004C54','A5ACAF'],
+    'Pittsburgh Steelers': ['000000','FFB612'], 'San Francisco 49ers': ['AA0000','B3995D'],
+    'Seattle Seahawks': ['002244','69BE28'], 'Tampa Bay Buccaneers': ['D50A0A','FF7900'],
+    'Tennessee Titans': ['0C2340','4B92DB'], 'Washington Commanders': ['5A1414','FFB612']
+  };
+  const BUDGET_MAX = 10.00;
+
+  function hexLuminance(hex){
+    const r = parseInt(hex.substr(0,2),16)/255, g = parseInt(hex.substr(2,2),16)/255, b = parseInt(hex.substr(4,2),16)/255;
+    return 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  function badgeStyle(team){
+    const c = TEAM_COLORS[team];
+    if(!c) return '';
+    const textColor = hexLuminance(c[0]) > 0.5 ? '#1a2c42' : '#ffffff';
+    return `background:#${c[0]};color:${textColor};`;
+  }
+
+  // Build grouped team grid: AFC divisions, then NFC divisions
+  const teamsCard = document.getElementById('teamsCard');
+  const divOrder = ['East','North','South','West'];
+  ['AFC','NFC'].forEach(conf => {
+    const heading = document.createElement('div');
+    heading.className = 'conf-heading ' + conf.toLowerCase();
+    heading.textContent = conf === 'AFC' ? 'American Football Conference' : 'National Football Conference';
+    teamsCard.appendChild(heading);
+
+    divOrder.forEach(div => {
+      const teamsInDiv = Object.keys(TEAM_META).filter(t => TEAM_META[t][0] === conf && TEAM_META[t][1] === div).sort();
+      if(!teamsInDiv.length) return;
+      const groupDiv = document.createElement('div');
+      groupDiv.className = 'div-group';
+      const title = document.createElement('div');
+      title.className = 'div-group-title';
+      title.textContent = conf + ' ' + div;
+      groupDiv.appendChild(title);
+      const grid = document.createElement('div');
+      grid.className = 'team-grid';
+      teamsInDiv.forEach(team => {
+        const label = document.createElement('label');
+        label.className = 'team-chip';
+        label.innerHTML = `
+          <input type="checkbox" value="${team}" data-price="${TEAM_PRICE[team]}">
+          <span class="abbr" style="${badgeStyle(team)}">${TEAM_ABBR[team]}</span>
+          <span class="name">${team}</span>
+          <span class="price">$${TEAM_PRICE[team].toFixed(2)}</span>
+        `;
+        grid.appendChild(label);
+      });
+      groupDiv.appendChild(grid);
+      teamsCard.appendChild(groupDiv);
+    });
+  });
+
+  const budgetAmountEl = document.getElementById('budgetAmount');
+  const submitBtn = document.getElementById('submitBtn');
+  const nameInput = document.getElementById('entryName');
+  const emailInput = document.getElementById('entryEmail');
+  const emailConfirmInput = document.getElementById('entryEmailConfirm');
+  const emailMatchError = document.getElementById('emailMatchError');
+  const statusMsg = document.getElementById('statusMsg');
+  const form = document.getElementById('entryForm');
+
+  // Block paste and drag-and-drop into the confirm field -- it has to be typed by hand.
+  ['paste','drop'].forEach(function(evt){
+    emailConfirmInput.addEventListener(evt, function(e){
+      e.preventDefault();
+      emailMatchError.textContent = 'Please type your email again \u2014 pasting isn\u2019t allowed here.';
+      emailMatchError.classList.add('show');
+    });
+  });
+  // Also block the right-click context menu on this field specifically, since its
+  // "Paste" option is another route around the paste-block above.
+  emailConfirmInput.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  function emailsMatch(){
+    return emailInput.value.trim() !== '' && emailInput.value.trim() === emailConfirmInput.value.trim();
+  }
+
+  function updateEmailMatchUI(){
+    if(emailConfirmInput.value.trim() === ''){
+      emailConfirmInput.classList.remove('match-ok','match-bad');
+      emailMatchError.classList.remove('show');
+      return;
+    }
+    const match = emailsMatch();
+    emailConfirmInput.classList.toggle('match-ok', match);
+    emailConfirmInput.classList.toggle('match-bad', !match);
+    if(!match){
+      emailMatchError.textContent = 'Emails don\u2019t match yet.';
+    }
+    emailMatchError.classList.toggle('show', !match);
+  }
+
+  function getChecked(){
+    return Array.prototype.slice.call(teamsCard.querySelectorAll('input[type=checkbox]:checked'));
+  }
+
+  function updateBudget(){
+    const checked = getChecked();
+    const total = checked.reduce((s, cb) => s + parseFloat(cb.dataset.price), 0);
+    budgetAmountEl.textContent = '$' + total.toFixed(2) + ' / $' + BUDGET_MAX.toFixed(2);
+    const over = total > BUDGET_MAX + 0.001;
+    budgetAmountEl.className = 'budget-amount ' + (over ? 'over' : 'ok');
+
+    Array.prototype.forEach.call(teamsCard.querySelectorAll('.team-chip'), chip => {
+      const cb = chip.querySelector('input');
+      chip.classList.toggle('checked', cb.checked);
+    });
+
+    updateEmailMatchUI();
+    const valid = nameInput.value.trim() && emailsMatch() && checked.length > 0 && !over;
+    submitBtn.disabled = !valid;
+    return {total, checked, over};
+  }
+
+  teamsCard.addEventListener('change', updateBudget);
+  nameInput.addEventListener('input', updateBudget);
+  emailInput.addEventListener('input', updateBudget);
+  emailConfirmInput.addEventListener('input', updateBudget);
+  updateBudget();
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    const {total, checked, over} = updateBudget();
+    statusMsg.className = 'status-msg';
+    statusMsg.textContent = '';
+
+    if(!emailsMatch()){
+      statusMsg.className = 'status-msg err';
+      statusMsg.textContent = 'Please make sure both email fields match.';
+      return;
+    }
+    if(checked.length === 0){
+      statusMsg.className = 'status-msg err';
+      statusMsg.textContent = 'Please select at least one team.';
+      return;
+    }
+    if(over){
+      statusMsg.className = 'status-msg err';
+      statusMsg.textContent = 'That selection is over the $10.00 budget \u2014 remove a team to continue.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting\u2026';
+
+    const teamNames = checked.map(cb => cb.value).join(', ');
+    const body = new URLSearchParams({
+      'form-name': 'pool-entries',
+      name: nameInput.value.trim(),
+      email: emailInput.value.trim(),
+      teams: teamNames,
+      total: total.toFixed(2)
+    }).toString();
+
+    fetch('/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body
+    })
+    .then(resp => {
+      if(!resp.ok) throw new Error('Server responded ' + resp.status);
+      statusMsg.className = 'status-msg ok';
+      statusMsg.textContent = 'Entry submitted \u2014 thanks, ' + nameInput.value.trim() + '! You picked ' + checked.length + ' team' + (checked.length===1?'':'s') + ' for $' + total.toFixed(2) + '.';
+      form.reset();
+      updateBudget();
+      submitBtn.textContent = 'Submit Entry';
+    })
+    .catch(err => {
+      statusMsg.className = 'status-msg err';
+      statusMsg.textContent = 'Could not submit \u2014 check your connection and try again.';
+      submitBtn.textContent = 'Submit Entry';
+      submitBtn.disabled = false;
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
