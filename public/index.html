@@ -789,7 +789,19 @@ section[id]{scroll-margin-top:20px;}
 }
 .detail-modal-title{font-family:'Anton', sans-serif; font-size:22px; color:var(--cream);}
 .detail-modal-sub{font-size:13px; color: rgba(243,236,221,0.55); margin-top:2px;}
-.detail-modal-chips{display:flex; flex-wrap:wrap; gap:8px;}
+.detail-modal-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+.detail-weekly-chart{margin-bottom:10px;}
+.detail-weekly-list{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+.detail-weekly-chip{
+  font-size:12.5px;
+  background: rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:5px;
+  padding:5px 10px;
+  color: rgba(243,236,221,0.75);
+}
+.detail-weekly-chip b{color: var(--gold-bright); font-weight:700;}
+.detail-weekly-chip.partial{opacity:0.6; font-style:italic;}
 .detail-modal-subhead{font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color: rgba(243,236,221,0.5); margin-bottom:10px;}
 .detail-modal-owners{display:flex; flex-direction:column; gap:2px; max-height:360px; overflow-y:auto;}
 .detail-modal-owner-row{
@@ -1908,6 +1920,21 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       return `<span class="owner-detail-chip"${style}>${teamLinkHtml(b.team, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[b.team]||''}</b> ${b.team}`)} <b>${b.score}</b>${liveTag}</span>`;
     }).join('');
 
+    const poolWeekly = getPoolWeeklyStats();
+    let weeklyHtml = '';
+    if(poolWeekly && poolWeekly.weeks.length){
+      const weekChips = poolWeekly.weeks.map(function(wk){
+        const d = wk.deltas[ownerId] || 0;
+        const partial = !isCurrentWeekComplete() && wk === poolWeekly.weeks[poolWeekly.weeks.length - 1];
+        return `<span class="detail-weekly-chip${partial ? ' partial' : ''}">Wk ${wk.week}: <b>${fmtDelta(d)}</b></span>`;
+      }).join('');
+      weeklyHtml = `
+        <div class="detail-modal-subhead">Weekly Points</div>
+        <div class="detail-weekly-chart">${buildWeeklyBars(ownerId, poolWeekly, 90)}</div>
+        <div class="detail-weekly-list">${weekChips}</div>
+      `;
+    }
+
     openModal(`
       <div class="detail-modal-head">
         <div class="detail-modal-rank">#${rankDisplay}</div>
@@ -1916,6 +1943,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           <div class="detail-modal-sub">${total} pts total${payout ? ' \u00b7 ' + fmtMoney(payout) + ' payout' : ''} \u00b7 ${entry.teams.length} teams</div>
         </div>
       </div>
+      ${weeklyHtml}
+      <div class="detail-modal-subhead">Teams</div>
       <div class="detail-modal-chips">${chips}</div>
     `);
   }
@@ -3363,11 +3392,19 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // week's pool average, red = fell short, the thin line is the average itself;
   // the current week is faded until it's final. All rows share one height scale,
   // so equal bars mean equal points from owner to owner.
-  function buildWeeklyBars(ownerId, stats){
+  function buildWeeklyBars(ownerId, stats, height){
     if(!stats || !stats.weeks.length) return '';
     const n = stats.weeks.length;
-    const H = 26, gap = n > 10 ? 1 : 2;
-    const barW = Math.max(3, Math.min(14, Math.floor((100 - (n - 1) * gap) / n)));
+    const H = height || 26;
+    // Bar width, gap, and the target total width all scale with height together, so a
+    // larger chart (e.g. in the owner detail popup, where there's real room) comes out
+    // proportionally wider and chunkier too, not just taller with the same thin bars.
+    // At the default height (no argument passed) this scale is exactly 1, so the
+    // existing compact leaderboard chart is completely unchanged.
+    const sizeScale = H / 26;
+    const gap = (n > 10 ? 1 : 2) * sizeScale;
+    const targetTotalW = 100 * sizeScale;
+    const barW = Math.max(3 * sizeScale, Math.min(14 * sizeScale, Math.floor((targetTotalW - (n - 1) * gap) / n)));
     const W = n * barW + (n - 1) * gap;
     const scale = (H - 4) / stats.maxPts;
     const inProgress = !isCurrentWeekComplete();
