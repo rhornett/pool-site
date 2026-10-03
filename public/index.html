@@ -498,24 +498,46 @@ section[id]{scroll-margin-top:20px;}
   margin-bottom:20px;
   flex-wrap:wrap;
 }
-.h2h-toolbar select{
+.h2h-picker{
+  position:relative;
   flex:1;
-  min-width:0;
+  min-width:180px;
+}
+.h2h-search-input{
+  width:100%;
   padding:10px 12px;
   border-radius:5px;
   border:1px solid var(--line);
   background: rgba(255,255,255,0.04);
   color: var(--cream);
+  font-family:'Barlow', sans-serif;
   font-size:14px;
 }
-/* The closed box above stays dark-themed, but most browsers render the
-   OPEN dropdown list with their own (usually white/light) popup background
-   that ignores our page styling -- so give the options dark text on a
-   light background explicitly, or they're unreadable against that popup. */
-.h2h-toolbar select option{
-  color: #1a2c42;
-  background: #ffffff;
+.h2h-search-input:focus{outline:none; border-color:var(--gold);}
+.h2h-suggestions{
+  position:absolute;
+  top:calc(100% + 4px);
+  left:0;
+  right:0;
+  max-height:260px;
+  overflow-y:auto;
+  background: var(--navy-light);
+  border:1px solid var(--gold);
+  border-radius:6px;
+  z-index:50;
+  display:none;
+  box-shadow:0 8px 24px rgba(0,0,0,0.4);
 }
+.h2h-suggestions.open{display:block;}
+.h2h-suggestion-item{
+  padding:9px 14px;
+  cursor:pointer;
+  font-size:14px;
+}
+.h2h-suggestion-item + .h2h-suggestion-item{border-top:1px solid var(--line);}
+.h2h-suggestion-item:hover, .h2h-suggestion-item.active{background: rgba(240,200,105,0.15);}
+.h2h-suggestion-meta{opacity:0.5; font-size:12.5px;}
+.h2h-suggestion-empty{padding:9px 14px; font-size:13px; color: rgba(243,236,221,0.5); font-style:italic;}
 .h2h-vs{
   font-family:'Anton', sans-serif;
   color: rgba(243,236,221,0.4);
@@ -1217,9 +1239,15 @@ footer{
         <div class="note">Compare any two entries side by side</div>
       </div>
       <div class="h2h-toolbar">
-        <select id="h2hSelectA"></select>
+        <div class="h2h-picker">
+          <input type="text" id="h2hSearchA" class="h2h-search-input" placeholder="Search owner\u2026" autocomplete="off">
+          <div class="h2h-suggestions" id="h2hSuggestionsA"></div>
+        </div>
         <span class="h2h-vs">vs</span>
-        <select id="h2hSelectB"></select>
+        <div class="h2h-picker">
+          <input type="text" id="h2hSearchB" class="h2h-search-input" placeholder="Search owner\u2026" autocomplete="off">
+          <div class="h2h-suggestions" id="h2hSuggestionsB"></div>
+        </div>
       </div>
       <div id="h2hResult"></div>
     </section>
@@ -2195,47 +2223,86 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   }
 
   // ---------- HEAD-TO-HEAD COMPARISON ----------
-  let h2hOptionsPopulated = false;
+  // Type-to-search pickers instead of plain <select> dropdowns -- scrolling through
+  // 116 entries in a native select is painful, so each side gets a text box that
+  // filters as you type, with a click-to-pick list of matches underneath.
+  let h2hPickersInitialized = false;
+  let h2hIdA = null, h2hIdB = null;
 
-  function populateH2HSelects(){
-    if(h2hOptionsPopulated) return;
-    const selA = document.getElementById('h2hSelectA');
-    const selB = document.getElementById('h2hSelectB');
-    if(!selA || !selB) return;
-    const sortedEntries = entries.slice().sort((a,b) => a.name.localeCompare(b.name));
-    const optionsHtml = '<option value="">Choose an owner\u2026</option>' + sortedEntries.map(e =>
-      `<option value="${e.id}">${e.name} (${e.teams.length} teams)</option>`
-    ).join('');
-    selA.innerHTML = optionsHtml;
-    selB.innerHTML = optionsHtml;
-    // Default to the current top 2 owners on the leaderboard (by score), not
-    // whichever two names happen to sort first alphabetically.
-    if(lastOwnerScores.length > 1){
-      selA.value = lastOwnerScores[0].id;
-      selB.value = lastOwnerScores[1].id;
-    } else if(sortedEntries.length > 1){
-      selA.value = sortedEntries[0].id;
-      selB.value = sortedEntries[1].id;
+  function setupH2HPicker(inputId, suggestionsId, getId, setId){
+    const input = document.getElementById(inputId);
+    const box = document.getElementById(suggestionsId);
+    if(!input || !box) return;
+
+    function showMatches(){
+      const q = input.value.trim().toLowerCase();
+      const matches = (q ? entries.filter(e => e.name.toLowerCase().includes(q)) : entries.slice()).slice(0, 8);
+      box.innerHTML = matches.length
+        ? matches.map(e => `<div class="h2h-suggestion-item" data-id="${e.id}">${e.name} <span class="h2h-suggestion-meta">(${e.teams.length} teams)</span></div>`).join('')
+        : '<div class="h2h-suggestion-empty">No owners match.</div>';
+      box.classList.add('open');
     }
-    selA.addEventListener('change', renderHeadToHead);
-    selB.addEventListener('change', renderHeadToHead);
-    h2hOptionsPopulated = true;
+
+    input.addEventListener('focus', showMatches);
+    input.addEventListener('input', showMatches);
+    input.addEventListener('keydown', function(ev){
+      if(ev.key === 'Escape'){ box.classList.remove('open'); input.blur(); }
+    });
+    input.addEventListener('blur', function(){
+      // On blur with no valid pick made, snap the text back to the last real
+      // selection rather than leaving a half-typed search query showing.
+      setTimeout(function(){
+        box.classList.remove('open');
+        const currentId = getId();
+        const entry = currentId ? entries.find(e => String(e.id) === String(currentId)) : null;
+        input.value = entry ? entry.name : '';
+      }, 150);
+    });
+    // mousedown (not click) with preventDefault so the input never blurs before the
+    // pick registers -- the classic dropdown-closes-before-the-click-lands bug.
+    box.addEventListener('mousedown', function(ev){
+      ev.preventDefault();
+      const item = ev.target.closest('.h2h-suggestion-item');
+      if(!item || !item.dataset.id) return;
+      const entry = entries.find(e => String(e.id) === String(item.dataset.id));
+      if(!entry) return;
+      setId(entry.id);
+      input.value = entry.name;
+      box.classList.remove('open');
+      renderHeadToHead();
+    });
+  }
+
+  function initH2HPickers(){
+    if(h2hPickersInitialized) return;
+    h2hPickersInitialized = true;
+    // Default to the current top 2 owners on the leaderboard (by score).
+    if(lastOwnerScores.length > 1){
+      h2hIdA = lastOwnerScores[0].id;
+      h2hIdB = lastOwnerScores[1].id;
+    } else if(entries.length > 1){
+      h2hIdA = entries[0].id;
+      h2hIdB = entries[1].id;
+    }
+    const inputA = document.getElementById('h2hSearchA');
+    const inputB = document.getElementById('h2hSearchB');
+    const nameFor = (id) => { const e = entries.find(x => String(x.id) === String(id)); return e ? e.name : ''; };
+    if(inputA) inputA.value = nameFor(h2hIdA);
+    if(inputB) inputB.value = nameFor(h2hIdB);
+    setupH2HPicker('h2hSearchA', 'h2hSuggestionsA', () => h2hIdA, (id) => { h2hIdA = id; });
+    setupH2HPicker('h2hSearchB', 'h2hSuggestionsB', () => h2hIdB, (id) => { h2hIdB = id; });
   }
 
   function renderHeadToHead(){
-    populateH2HSelects();
+    initH2HPickers();
     const container = document.getElementById('h2hResult');
     if(!container) return;
-    const selA = document.getElementById('h2hSelectA');
-    const selB = document.getElementById('h2hSelectB');
-    if(!selA || !selB) return;
-    const idA = selA.value, idB = selB.value;
-    if(!idA || !idB){
+    if(!h2hIdA || !h2hIdB){
       container.innerHTML = '<div class="empty-state">Choose two owners above to compare.</div>';
       return;
     }
-    const entryA = entries.find(e => String(e.id) === String(idA));
-    const entryB = entries.find(e => String(e.id) === String(idB));
+    const entryA = entries.find(e => String(e.id) === String(h2hIdA));
+    const entryB = entries.find(e => String(e.id) === String(h2hIdB));
     if(!entryA || !entryB){
       container.innerHTML = '<div class="empty-state">Choose two owners above to compare.</div>';
       return;
