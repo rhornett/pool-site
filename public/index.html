@@ -743,6 +743,30 @@ section[id]{scroll-margin-top:20px;}
 .modal-head h3{font-family:'Anton',sans-serif; font-weight:400; font-size:22px; margin:0; color:var(--cream);}
 .modal-close{background:none; border:none; color:rgba(243,236,221,0.6); font-size:26px; cursor:pointer; line-height:1;}
 .modal-note{padding:14px 22px 0; font-size:13px; color:rgba(243,236,221,0.55);}
+.name-link{cursor:pointer; text-decoration:underline; text-decoration-color:rgba(240,200,105,0.35); text-underline-offset:2px;}
+.name-link:hover{color:var(--gold-bright); text-decoration-color:var(--gold-bright);}
+.detail-modal .modal-body{padding:20px 22px; overflow-y:auto;}
+.detail-modal-head{display:flex; align-items:center; gap:16px; margin-bottom:16px;}
+.detail-modal-rank{
+  font-family:'Anton', sans-serif;
+  font-size:24px;
+  color: var(--gold-bright);
+  flex:none;
+  min-width:44px;
+  text-align:center;
+}
+.detail-modal-title{font-family:'Anton', sans-serif; font-size:22px; color:var(--cream);}
+.detail-modal-sub{font-size:13px; color: rgba(243,236,221,0.55); margin-top:2px;}
+.detail-modal-chips{display:flex; flex-wrap:wrap; gap:8px;}
+.detail-modal-subhead{font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color: rgba(243,236,221,0.5); margin-bottom:10px;}
+.detail-modal-owners{display:flex; flex-direction:column; gap:2px; max-height:360px; overflow-y:auto;}
+.detail-modal-owner-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  font-size:14px;
+}
+.detail-modal-owner-stat{font-size:12.5px; color: rgba(243,236,221,0.5); flex:none;}
 .modal-body{padding:14px 22px; overflow-y:auto; flex:1;}
 .modal-foot{padding:16px 22px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px;}
 .edit-row{
@@ -1341,6 +1365,17 @@ footer{
     </div>
   </div>
 
+  <!-- Owner / Team Detail Modal -->
+  <div class="modal-overlay" id="detailModalOverlay" style="display:none;">
+    <div class="modal detail-modal">
+      <div class="modal-head">
+        <h3>Details</h3>
+        <button class="modal-close" id="detailModalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="detailModalBody"></div>
+    </div>
+  </div>
+
   <footer>Rikki Hornett NFL Owner's Pool · Prestige &amp; Glory since 2016</footer>
 </div>
 
@@ -1768,6 +1803,133 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     return 'longshot';
   }
 
+  // ---------- CLICKABLE NAME / TEAM DETAIL MODAL ----------
+  // Every owner name and every team mention across the dashboard can be clicked:
+  // an owner name opens a modal showing their full roster; a team opens a modal
+  // showing every owner who holds it, each with their current total. The two link
+  // into each other so you can bounce from an owner to one of their teams to that
+  // team's other owners and so on. Built once, wired up everywhere via a single
+  // delegated click listener rather than per-element handlers, since most of this
+  // content is regenerated on every re-render.
+  let teamOwnersMapCache = null;
+  function getTeamOwnersMap(){
+    if(teamOwnersMapCache) return teamOwnersMapCache;
+    const map = {};
+    teamNames.forEach(function(t){ map[t] = []; });
+    entries.forEach(function(e){
+      e.teams.forEach(function(t){
+        if(map[t.team]) map[t.team].push(e);
+      });
+    });
+    teamOwnersMapCache = map;
+    return map;
+  }
+
+  function ownerLinkHtml(id, name){
+    return `<span class="name-link" data-owner-link="${id}">${name}</span>`;
+  }
+  function teamLinkHtml(team, innerHtml){
+    return `<span class="name-link" data-team-link="${team}">${innerHtml != null ? innerHtml : team}</span>`;
+  }
+
+  function openModal(bodyHtml){
+    const overlay = document.getElementById('detailModalOverlay');
+    const body = document.getElementById('detailModalBody');
+    if(!overlay || !body) return;
+    body.innerHTML = bodyHtml;
+    overlay.style.display = 'flex';
+  }
+  function closeModal(){
+    const overlay = document.getElementById('detailModalOverlay');
+    if(overlay) overlay.style.display = 'none';
+  }
+
+  function openOwnerDetail(ownerId){
+    const entry = entries.find(e => String(e.id) === String(ownerId));
+    const scored = lastOwnerScores.find(o => String(o.id) === String(ownerId));
+    if(!entry){ closeModal(); return; }
+    const total = scored ? scored.total : 0;
+    const rankDisplay = scored ? scored.rankDisplay : '\u2014';
+    const payout = lastPayouts[ownerId];
+    const breakdown = (scored ? scored.breakdown : entry.teams.map(t => ({team: t.team, score: 0})))
+      .slice().sort((a,b) => b.score - a.score);
+
+    const chips = breakdown.map(function(b){
+      const accent = teamAccentColor(b.team);
+      const style = accent ? ` style="border-left:3px solid ${accent}"` : '';
+      const abbrStyle = accent ? ` style="color:${accent}"` : '';
+      const live = liveGameInfo[b.team];
+      const liveTag = live ? ` <a class="chip-live live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF ${live.myScore}-${live.oppScore}</a>` : '';
+      return `<span class="owner-detail-chip"${style}>${teamLinkHtml(b.team, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[b.team]||''}</b> ${b.team}`)} <b>${b.score}</b>${liveTag}</span>`;
+    }).join('');
+
+    openModal(`
+      <div class="detail-modal-head">
+        <div class="detail-modal-rank">#${rankDisplay}</div>
+        <div>
+          <div class="detail-modal-title">${entry.name}</div>
+          <div class="detail-modal-sub">${total} pts total${payout ? ' \u00b7 ' + fmtMoney(payout) + ' payout' : ''} \u00b7 ${entry.teams.length} teams</div>
+        </div>
+      </div>
+      <div class="detail-modal-chips">${chips}</div>
+    `);
+  }
+
+  function openTeamDetail(team){
+    const stats = liveState.stats[team];
+    const price = teamPrice[team];
+    const standing = teamStandingCategory(team);
+    const seed = teamPlayoffSeed[team];
+    const conf = (teamMeta[team] || [])[0] || '';
+    const score = (lastTeamScoreMap && lastTeamScoreMap[team] != null) ? lastTeamScoreMap[team] : (stats ? computeTeamScore(team, liveState.stats) : 0);
+    const owners = getTeamOwnersMap()[team] || [];
+    const accent = teamAccentColor(team);
+
+    let standingBadge = '';
+    if(standing === 'position'){
+      const div = (teamMeta[team] || [])[1] || '';
+      standingBadge = (seed <= 4) ? `${conf} ${div} Division Leader (#${seed})` : `Wild card (${conf} #${seed})`;
+    } else if(standing === 'hunt') standingBadge = `In the hunt (${conf} #${seed})`;
+    else if(standing === 'longshot') standingBadge = `Long shot (${conf} #${seed})`;
+
+    // Sorted by each owner's overall pool standing (best rank first), not just
+    // whatever order they happen to sit in behind the scenes.
+    const ownersSorted = owners.map(function(e){
+      const scored = lastOwnerScores.find(o => String(o.id) === String(e.id));
+      return {entry: e, scored: scored};
+    }).sort(function(a, b){
+      const rankA = a.scored ? a.scored.rank : Infinity;
+      const rankB = b.scored ? b.scored.rank : Infinity;
+      return rankA - rankB;
+    });
+    const ownerRows = ownersSorted.length ? ownersSorted.map(function(o){
+      const total = o.scored ? o.scored.total : 0;
+      const rankDisplay = o.scored ? o.scored.rankDisplay : '\u2014';
+      return `<div class="detail-modal-owner-row">${ownerLinkHtml(o.entry.id, o.entry.name)}<span class="detail-modal-owner-stat">#${rankDisplay} overall \u00b7 ${total} pts</span></div>`;
+    }).join('') : '<div class="empty-state">No one in this pool has picked this team.</div>';
+
+    openModal(`
+      <div class="detail-modal-head">
+        <div class="detail-modal-rank" ${accent ? `style="color:${accent}"` : ''}>${teamAbbr[team]||''}</div>
+        <div>
+          <div class="detail-modal-title">${team}</div>
+          <div class="detail-modal-sub">${stats ? stats.wins + '-' + stats.losses : '\u2014'} \u00b7 ${score} pt${score===1?'':'s'} \u00b7 $${price.toFixed(2)}${standingBadge ? ' \u00b7 ' + standingBadge : ''}</div>
+        </div>
+      </div>
+      <div class="detail-modal-subhead">Owned by ${owners.length} entr${owners.length===1?'y':'ies'} in this pool</div>
+      <div class="detail-modal-owners">${ownerRows}</div>
+    `);
+  }
+
+  document.addEventListener('click', function(ev){
+    const ownerLink = ev.target.closest('[data-owner-link]');
+    if(ownerLink){ openOwnerDetail(ownerLink.getAttribute('data-owner-link')); return; }
+    const teamLink = ev.target.closest('[data-team-link]');
+    if(teamLink){ openTeamDetail(teamLink.getAttribute('data-team-link')); return; }
+    if(ev.target.id === 'detailModalOverlay' || ev.target.closest('#detailModalClose')){ closeModal(); }
+  });
+  document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape') closeModal(); });
+
   // ---------- PLAYOFF BRACKET (current seeding, not real results yet) ----------
   // The regular season isn't over, so there's no real bracket to show yet -- this is
   // "if the playoffs started today": each conference's real, live top-7 seeds fill in
@@ -1784,7 +1946,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       if(!team) return `<span class="bracket-team-unit">${seedHtml}<span class="bracket-team bracket-team-tbd">TBD</span></span>`;
       const accent = teamAccentColor(team);
       const style = accent ? ` style="color:${accent}"` : '';
-      return `<span class="bracket-team-unit">${seedHtml}<span class="bracket-team"><b class="bracket-abbr"${style}>${teamAbbr[team]||''}</b>${team}</span></span>`;
+      const inner = `<b class="bracket-abbr"${style}>${teamAbbr[team]||''}</b>${team}`;
+      return `<span class="bracket-team-unit">${seedHtml}<span class="bracket-team">${teamLinkHtml(team, inner)}</span></span>`;
     }
 
     const confsHtml = ['AFC','NFC'].map(function(conf){
@@ -1869,10 +2032,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       }
       else if(standing === 'hunt') badges += `<span class="badge standing-hunt">In the hunt${seedTag}</span>`;
       else if(standing === 'longshot') badges += `<span class="badge standing-longshot">Long shot${seedTag}</span>`;
+      const teamOwnerCount = (getTeamOwnersMap()[t.team] || []).length;
+      badges += `<span class="badge name-link" data-team-link="${t.team}">${teamOwnerCount} owner${teamOwnerCount===1?'':'s'}</span>`;
       return `
         <div class="team-score-row${live ? ' team-is-live live-' + live.state : ''}">
           <div class="team-rank">${i+1}</div>
-          <div class="team-label"><span class="abbr" style="${teamBadgeStyle(t.team)}">${teamAbbr[t.team]}</span>${t.team}</div>
+          <div class="team-label">${teamLinkHtml(t.team, `<span class="abbr" style="${teamBadgeStyle(t.team)}">${teamAbbr[t.team]}</span>${t.team}`)}</div>
           <div class="team-score-badges">${badges}</div>
           <div class="team-score-total">${t.score}</div>
         </div>
@@ -2080,7 +2245,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           const accent = teamAccentColor(t);
           const style = accent ? ` style="border-left:3px solid ${accent}"` : '';
           const abbrStyle = accent ? ` style="color:${accent}"` : '';
-          return `<span class="owner-detail-chip"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${teamScoreMap[t]||0} pt${(teamScoreMap[t]||0)===1?'':'s'}</b> <span class="chip-price">$${teamPrice[t].toFixed(2)}</span></span>`;
+          return `<span class="owner-detail-chip"${style}>${teamLinkHtml(t, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t}`)} <b>${teamScoreMap[t]||0} pt${(teamScoreMap[t]||0)===1?'':'s'}</b> <span class="chip-price">$${teamPrice[t].toFixed(2)}</span></span>`;
         }).join('');
       }
       document.getElementById('bestScoreTotal').textContent = result.totalScore;
@@ -2109,7 +2274,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           const accent = teamAccentColor(t);
           const style = accent ? ` style="border-left:3px solid ${accent}"` : '';
           const abbrStyle = accent ? ` style="color:${accent}"` : '';
-          return `<span class="owner-detail-chip"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${teamScoreMap[t]||0} pt${(teamScoreMap[t]||0)===1?'':'s'}</b> <span class="chip-price">$${teamPrice[t].toFixed(2)}</span></span>`;
+          return `<span class="owner-detail-chip"${style}>${teamLinkHtml(t, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t}`)} <b>${teamScoreMap[t]||0} pt${(teamScoreMap[t]||0)===1?'':'s'}</b> <span class="chip-price">$${teamPrice[t].toFixed(2)}</span></span>`;
         }).join('');
       }
       document.getElementById('worstScoreTotal').textContent = result.totalScore;
@@ -2182,7 +2347,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         <div class="owner-card">
           <div class="owner-rank ${o.rankClass}">${o.rankDisplay}</div>
           <div class="owner-info">
-            <div class="owner-name">${o.name}</div>
+            <div class="owner-name">${ownerLinkHtml(o.id, o.name)}</div>
             ${metaHtml}
           </div>
           ${lastPayouts[o.id] ? `<div class="owner-payout">${fmtMoney(lastPayouts[o.id])}</div>` : ''}
@@ -2198,7 +2363,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             const abbrStyle = accent ? ` style="color:${accent}"` : '';
             const live = liveGameInfo[b.team];
             const liveTag = live ? ` <a class="chip-live live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF ${live.myScore}-${live.oppScore}</a>` : '';
-            return `<span class="owner-detail-chip"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[b.team]||''}</b> ${b.team} <b>${b.score}</b>${liveTag}</span>`;
+            return `<span class="owner-detail-chip"${style}>${teamLinkHtml(b.team, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[b.team]||''}</b> ${b.team}`)} <b>${b.score}</b>${liveTag}</span>`;
           }).join('')}
         </div>
       `;
@@ -2327,7 +2492,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       const live = liveGameInfo[t];
       const liveTag = live ? ` <a class="chip-live live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF ${live.myScore}-${live.oppScore}</a>` : '';
       const sharedTag = isShared ? ' <span class="chip-shared-tag">SHARED</span>' : '';
-      return `<span class="owner-detail-chip${isShared ? ' shared' : ''}"${style}><b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t} <b>${lastTeamScoreMap[t]||0}</b>${liveTag}${sharedTag}</span>`;
+      return `<span class="owner-detail-chip${isShared ? ' shared' : ''}"${style}>${teamLinkHtml(t, `<b class="chip-abbr"${abbrStyle}>${teamAbbr[t]||''}</b> ${t}`)} <b>${lastTeamScoreMap[t]||0}</b>${liveTag}${sharedTag}</span>`;
     }).join('');
 
     const diff = totalA - totalB;
@@ -2337,11 +2502,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       <div class="h2h-summary">${diffText}</div>
       <div class="h2h-columns">
         <div class="h2h-col">
-          <div class="h2h-col-head"><span class="h2h-name">${entryA.name}</span><span class="h2h-score">${totalA}</span></div>
+          <div class="h2h-col-head"><span class="h2h-name">${ownerLinkHtml(entryA.id, entryA.name)}</span><span class="h2h-score">${totalA}</span></div>
           <div class="h2h-chips">${renderChips(teamsA, teamsB)}</div>
         </div>
         <div class="h2h-col">
-          <div class="h2h-col-head"><span class="h2h-name">${entryB.name}</span><span class="h2h-score">${totalB}</span></div>
+          <div class="h2h-col-head"><span class="h2h-name">${ownerLinkHtml(entryB.id, entryB.name)}</span><span class="h2h-score">${totalB}</span></div>
           <div class="h2h-chips">${renderChips(teamsB, teamsA)}</div>
         </div>
       </div>
@@ -2866,7 +3031,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         const predicted = Math.round(result.predictedScores[e.id] || 0);
         return '<div class="highlight-card odds-card">' +
           '<div class="highlight-head"><span class="highlight-icon">\uD83C\uDFC6</span><span class="highlight-label">Pool win odds</span></div>' +
-          '<div class="highlight-names">' + e.name + '</div>' +
+          '<div class="highlight-names">' + ownerLinkHtml(e.id, e.name) + '</div>' +
           '<div class="highlight-detail odds-pct">' + fmtOddsPct(e.id) + '%</div>' +
           '<div class="odds-predicted">Predicted final score: ' + predicted + '</div>' +
         '</div>';
@@ -2888,7 +3053,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           const confDisplay = conf >= 10 ? conf.toFixed(0) : (conf >= 1 ? conf.toFixed(1) : (conf > 0 ? '<1' : '0'));
           return '<div class="highlight-card odds-card">' +
             '<div class="highlight-head"><span class="highlight-icon">' + ORDINAL_ICON + '</span><span class="highlight-label">' + ORDINALS[idx] + ' place</span></div>' +
-            '<div class="highlight-names">' + e.name + '</div>' +
+            '<div class="highlight-names">' + ownerLinkHtml(e.id, e.name) + '</div>' +
             '<div class="highlight-detail odds-pct">' + confDisplay + '%</div>' +
             '<div class="odds-predicted">Chance of a top-5 finish</div>' +
           '</div>';
