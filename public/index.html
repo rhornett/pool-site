@@ -358,6 +358,39 @@ section[id]{scroll-margin-top:20px;}
 }
 .bracket-sb .bracket-tbd{border:none; padding:4px 0 0;}
 .scoring-line{margin-top:14px; font-size:12.5px; color: rgba(243,236,221,0.5); line-height:1.5;}
+.recap-wrap{display:flex; flex-direction:column; align-items:center; gap:18px;}
+.recap-card{
+  width:100%;
+  max-width:400px;
+  aspect-ratio: 1080 / 1350;
+  background: linear-gradient(180deg, #16253b 0%, #0f1b2d 100%);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:28px 24px;
+  display:flex;
+  flex-direction:column;
+  box-shadow:0 12px 32px rgba(0,0,0,0.4);
+}
+.recap-header{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
+.recap-crest{width:52px; height:52px; border-radius:8px; overflow:hidden; flex:none;}
+.recap-crest img{width:100%; height:100%; object-fit:cover;}
+.recap-pool-name{font-size:10px; letter-spacing:0.08em; color: var(--gold-bright); text-transform:uppercase;}
+.recap-week-title{font-family:'Anton', sans-serif; font-size:22px; color: var(--cream); line-height:1.15; margin-top:2px;}
+.recap-stats{display:flex; flex-direction:column; gap:14px; flex:1;}
+.recap-stat{
+  background: rgba(255,255,255,0.04);
+  border:1px solid var(--line);
+  border-left:3px solid var(--gold-bright);
+  border-radius:8px;
+  padding:14px 16px;
+}
+.recap-stat-top{display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+.recap-stat-icon{font-size:16px;}
+.recap-stat-label{font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color: rgba(243,236,221,0.5);}
+.recap-stat-name{font-family:'Anton', sans-serif; font-size:19px; color: var(--cream); line-height:1.2;}
+.recap-stat-value{font-size:13px; color: var(--gold-bright); margin-top:2px;}
+.recap-footer{text-align:center; font-size:11px; color: rgba(243,236,221,0.4); margin-top:18px; letter-spacing:0.04em;}
+.recap-download-btn{min-width:180px;}
 .scoring-line b{color: rgba(243,236,221,0.75);}
 .owner-score-block{
   display:flex;
@@ -1122,6 +1155,7 @@ footer{
       <a href="#pool-odds-section">Pool Odds</a>
       <a href="#predicted-standings-section">Predicted Standings</a>
       <a href="#highlights-section">Highlights</a>
+      <a href="#weekly-recap-section">Weekly Recap</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
     </div>
 
@@ -1160,6 +1194,18 @@ footer{
       <div class="highlights-status" id="highlightsStatus"></div>
       <div class="highlights-board" id="highlightsBoard"></div>
       <div class="scoring-line"><b>Scoring:</b> +1 per win &middot; +5 division &middot; +3 per playoff win &middot; +5 conference &middot; +10 Super Bowl &mdash; awarded once a result is official</div>
+    </section>
+
+    <section id="weekly-recap-section">
+      <div class="sec-head">
+        <h2>Weekly Recap</h2>
+        <div class="note">A shareable summary of the week &mdash; download it and drop it in the group chat</div>
+      </div>
+      <div class="recap-wrap">
+        <div class="recap-card" id="recapCard"></div>
+        <button class="live-btn primary recap-download-btn" id="recapDownloadBtn">Download Image</button>
+      </div>
+      <canvas id="recapCanvas" width="1080" height="1350" style="display:none;"></canvas>
     </section>
 
     <section id="owner-leaderboard-section">
@@ -2075,6 +2121,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       renderScoreHistory();
       renderOwnerLeaderboardList(ownerSearchTerm); // picks up weekly delta / rank movement / consistency badges
       renderHighlights();
+      renderWeeklyRecap();
     }); // async -- fetches each completed week fresh, nothing stored
     renderPoolOdds(); // async -- throttled internally; fetches live division odds + runs the playoff simulation
   }
@@ -2647,6 +2694,22 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // the front-page highlight cards and the per-owner badges on the leaderboard,
   // so the two can never disagree. Each entry is {ids:{ownerId:true}, ...}, or
   // null when there's nothing meaningful to highlight (e.g. everyone tied).
+  // Owner names for a set of ids, in current-rank order; duplicate names
+  // (someone with several entries) collapse to "Name (\u00D72)"; long ties
+  // are trimmed to two names plus a "+N more". Shared by Highlights and the
+  // Weekly Recap card so both handle ties the same way.
+  function namesForIds(ids){
+    const counts = {}, order = [];
+    lastOwnerScores.forEach(function(o){
+      if(!ids[o.id]) return;
+      if(counts[o.name] == null){ counts[o.name] = 0; order.push(o.name); }
+      counts[o.name] += 1;
+    });
+    const labels = order.map(function(n){ return counts[n] > 1 ? n + ' (\u00D7' + counts[n] + ')' : n; });
+    if(labels.length <= 3) return labels.join(', ');
+    return labels.slice(0, 2).join(', ') + ' +' + (labels.length - 2) + ' more';
+  }
+
   function getHighlightSets(){
     const weekly = getWeeklyStats();
     if(!weekly) return null;
@@ -2716,21 +2779,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       return;
     }
 
-    // Owner names for a set of ids, in current-rank order; duplicate names
-    // (someone with several entries) collapse to "Name (\u00D72)"; long ties
-    // are trimmed to two names plus a "+N more".
-    const namesFor = function(ids){
-      const counts = {}, order = [];
-      lastOwnerScores.forEach(function(o){
-        if(!ids[o.id]) return;
-        if(counts[o.name] == null){ counts[o.name] = 0; order.push(o.name); }
-        counts[o.name] += 1;
-      });
-      const labels = order.map(function(n){ return counts[n] > 1 ? n + ' (\u00D7' + counts[n] + ')' : n; });
-      // up to three names read fine; beyond that, two names plus a count
-      if(labels.length <= 3) return labels.join(', ');
-      return labels.slice(0, 2).join(', ') + ' +' + (labels.length - 2) + ' more';
-    };
+    const namesFor = namesForIds;
     const when = isCurrentWeekComplete() ? ' this week' : ' so far';
     const pts = function(n){ return fmtDelta(n) + (Math.abs(n) === 1 ? ' pt' : ' pts') + when; };
 
@@ -2750,6 +2799,159 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     }).join('') : '<div class="empty-state">No standout performers yet this week.</div>';
   }
 
+  // ---------- WEEKLY RECAP (shareable card) ----------
+  function recapStats(){
+    const hl = getHighlightSets();
+    const leader = lastOwnerScores[0];
+    const when = isCurrentWeekComplete() ? ' this week' : ' so far';
+    const stats = [];
+    if(hl && hl.topScorer){
+      stats.push({icon: '\uD83D\uDD25', label: 'Top Scorer', name: namesForIds(hl.topScorer.ids),
+        value: fmtDelta(hl.topScorer.delta) + (Math.abs(hl.topScorer.delta) === 1 ? ' pt' : ' pts') + when});
+    }
+    if(hl && hl.climber){
+      stats.push({icon: '\uD83D\uDCC8', label: 'Biggest Climber', name: namesForIds(hl.climber.ids),
+        value: '\u25B2' + hl.climber.places + (hl.climber.places === 1 ? ' place' : ' places') + when});
+    }
+    if(leader){
+      stats.push({icon: '\uD83C\uDFC6', label: 'Pool Leader', name: leader.name, value: leader.total + ' pts total'});
+    }
+    if(lastPoolFavorite){
+      stats.push({icon: '\uD83C\uDFB2', label: 'Pool Odds Favorite', name: lastPoolFavorite.name, value: lastPoolFavorite.pct + ' to win it all'});
+    }
+    return stats;
+  }
+
+  function recapWeekLabel(){
+    if(playoffPhase) return 'Playoff Recap';
+    if(currentWeekNumber == null) return 'Weekly Recap';
+    return 'Week ' + currentWeekNumber + (isCurrentWeekComplete() ? ' Recap' : ' So Far');
+  }
+
+  function renderWeeklyRecap(){
+    const card = document.getElementById('recapCard');
+    const btn = document.getElementById('recapDownloadBtn');
+    if(!card) return;
+    if(currentWeekNumber == null){
+      card.innerHTML = '<div class="empty-state">Check back once this week\u2019s results are in.</div>';
+      if(btn) btn.disabled = true;
+      return;
+    }
+    const stats = recapStats();
+    if(!stats.length){
+      card.innerHTML = '<div class="empty-state">Not enough results yet to build a recap.</div>';
+      if(btn) btn.disabled = true;
+      return;
+    }
+    if(btn) btn.disabled = false;
+    const crestImg = document.getElementById('crestImg');
+    const crestSrc = crestImg ? crestImg.src : '';
+    card.innerHTML = `
+      <div class="recap-header">
+        <div class="recap-crest"><img src="${crestSrc}" alt=""></div>
+        <div>
+          <div class="recap-pool-name">Rikki Hornett NFL Owner's Pool</div>
+          <div class="recap-week-title">${recapWeekLabel()}</div>
+        </div>
+      </div>
+      <div class="recap-stats">
+        ${stats.map(function(s){
+          return '<div class="recap-stat">' +
+            '<div class="recap-stat-top"><span class="recap-stat-icon">' + s.icon + '</span><span class="recap-stat-label">' + s.label + '</span></div>' +
+            '<div class="recap-stat-name">' + s.name + '</div>' +
+            '<div class="recap-stat-value">' + s.value + '</div>' +
+          '</div>';
+        }).join('')}
+      </div>
+      <div class="recap-footer">hornett.org</div>
+    `;
+  }
+
+  function drawRecapCanvas(){
+    const canvas = document.getElementById('recapCanvas');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PAD = 70;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#16253b');
+    grad.addColorStop(1, '#0f1b2d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    let y = PAD;
+    const crestSize = 110;
+    const crestImg = document.getElementById('crestImg');
+    if(crestImg && crestImg.complete && crestImg.naturalWidth > 0){
+      ctx.drawImage(crestImg, PAD, y, crestSize, crestSize);
+    }
+    const textX = PAD + crestSize + 28;
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#f0c869';
+    ctx.font = '600 20px Barlow, Arial, sans-serif';
+    wrapText(ctx, "RIKKI HORNETT NFL OWNER'S POOL", textX, y + 14, W - textX - PAD, 24);
+    ctx.fillStyle = '#f3ecdd';
+    ctx.font = '400 46px Anton, Arial, sans-serif';
+    ctx.fillText(recapWeekLabel().toUpperCase(), textX, y + 48);
+    y += crestSize + 50;
+
+    const stats = recapStats();
+    // A fixed box size that comfortably fits the three lines of text, rather than
+    // stretching to fill whatever space is left -- with fewer than 4 stats (e.g. no
+    // rank movement yet to report), that stretching left boxes looking sparse and
+    // mostly empty. The whole stack is vertically centered in the remaining space
+    // instead, so 2 stats look as intentional as 4.
+    const boxH = 150, gap = 20;
+    const stackH = stats.length * boxH + Math.max(0, stats.length - 1) * gap;
+    const availableH = H - y - 90;
+    let by = y + Math.max(0, (availableH - stackH) / 2);
+    stats.forEach(function(s){
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.fillRect(PAD, by, W - PAD * 2, boxH);
+      ctx.fillStyle = '#f0c869';
+      ctx.fillRect(PAD, by, 6, boxH);
+
+      const innerX = PAD + 28;
+      ctx.fillStyle = 'rgba(243,236,221,0.55)';
+      ctx.font = '600 20px Barlow, Arial, sans-serif';
+      ctx.fillText(s.icon + '  ' + s.label.toUpperCase(), innerX, by + 26);
+
+      ctx.fillStyle = '#f3ecdd';
+      ctx.font = '400 36px Anton, Arial, sans-serif';
+      ctx.fillText(s.name, innerX, by + 62);
+
+      ctx.fillStyle = '#f0c869';
+      ctx.font = '400 20px Barlow, Arial, sans-serif';
+      ctx.fillText(s.value, innerX, by + 110);
+
+      by += boxH + gap;
+    });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(243,236,221,0.4)';
+    ctx.font = '400 18px Barlow, Arial, sans-serif';
+    ctx.fillText('hornett.org', W / 2, H - 46);
+    ctx.textAlign = 'left';
+  }
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+    const words = text.split(' ');
+    let line = '';
+    let lineY = y;
+    for(let i = 0; i < words.length; i++){
+      const testLine = line + words[i] + ' ';
+      if(ctx.measureText(testLine).width > maxWidth && line !== ''){
+        ctx.fillText(line, x, lineY);
+        line = words[i] + ' ';
+        lineY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, x, lineY);
+  }
+
   // ---------- POOL ODDS (live playoff simulation) ----------
   // Each team's division-win chance comes straight from ESPN's own live projection feed
   // (real, confirmed data, fetched fresh below). ESPN doesn't publish a clean "chance to
@@ -2760,6 +2962,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // Every input is real, live ESPN data; the simulation itself is ours, and is described
   // as such wherever it's shown.
   let lastPoolOddsRefresh = 0;
+  let lastPoolFavorite = null; // {name, pct} -- set once Pool Odds has actually run
 
   // ESPN's numeric team IDs, permanent and never change year to year. Confirmed live
   // against the same standings feed the "Refresh Live Sync" button already uses
@@ -3026,6 +3229,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         favPctEl.textContent = fmtOddsPct(top5[0].id) + '%';
         if(favLblEl) favLblEl.textContent = 'Favorite: ' + top5[0].name;
       }
+      if(top5.length) lastPoolFavorite = {name: top5[0].name, pct: fmtOddsPct(top5[0].id) + '%'};
 
       board.innerHTML = top5.map(function(e){
         const predicted = Math.round(result.predictedScores[e.id] || 0);
@@ -3629,7 +3833,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         liveGameInfo = nowLive;
         renderLiveScoreboard();
       })
-      .catch(function(){ liveFeedFailed = true; renderHighlights(); /* best-effort -- leave whatever badges were last shown */ });
+      .catch(function(){ liveFeedFailed = true; renderHighlights(); renderWeeklyRecap(); /* best-effort -- leave whatever badges were last shown */ });
   }
 
   fetchLiveGameStatus();
@@ -3660,7 +3864,23 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     renderLiveScoreboard();
   });
 
+  const recapBtn = document.getElementById('recapDownloadBtn');
+  if(recapBtn){
+    recapBtn.addEventListener('click', function(){
+      const ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      ready.then(function(){
+        drawRecapCanvas();
+        const canvas = document.getElementById('recapCanvas');
+        const link = document.createElement('a');
+        link.download = 'pool-weekly-recap.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    });
+  }
+
   renderHighlights();
+  renderWeeklyRecap();
   renderLiveScoreboard();
 })();
 </script>
