@@ -790,18 +790,17 @@ section[id]{scroll-margin-top:20px;}
 .detail-modal-title{font-family:'Anton', sans-serif; font-size:22px; color:var(--cream);}
 .detail-modal-sub{font-size:13px; color: rgba(243,236,221,0.55); margin-top:2px;}
 .detail-modal-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
-.detail-weekly-chart{margin-bottom:10px;}
-.detail-weekly-list{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
-.detail-weekly-chip{
-  font-size:12.5px;
-  background: rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:5px;
-  padding:5px 10px;
-  color: rgba(243,236,221,0.75);
+.detail-weekly{overflow-x:auto; margin-bottom:20px;}
+.detail-weekly-chart{line-height:0; margin-bottom:6px;}
+.detail-weekly-chart .owner-weekbars{max-width:none;} /* keep bars at label-column width; .detail-weekly scrolls instead */
+.detail-weekly-list{display:grid; width:max-content;}
+.detail-weekly-label{
+  display:flex; flex-direction:column; align-items:center;
+  font-size:11px; line-height:1.3; white-space:nowrap;
+  color: rgba(243,236,221,0.6);
 }
-.detail-weekly-chip b{color: var(--gold-bright); font-weight:700;}
-.detail-weekly-chip.partial{opacity:0.6; font-style:italic;}
+.detail-weekly-label b{font-size:13px; color: var(--gold-bright); font-weight:700;}
+.detail-weekly-label.partial{opacity:0.6; font-style:italic;}
 .detail-modal-subhead{font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color: rgba(243,236,221,0.5); margin-bottom:10px;}
 .detail-modal-owners{display:flex; flex-direction:column; gap:2px; max-height:360px; overflow-y:auto;}
 .detail-modal-owner-row{
@@ -1923,15 +1922,22 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const poolWeekly = getPoolWeeklyStats();
     let weeklyHtml = '';
     if(poolWeekly && poolWeekly.weeks.length){
-      const weekChips = poolWeekly.weeks.map(function(wk){
+      // Bars and labels share one column width + gap so each label sits under its bar;
+      // columns narrow as weeks accumulate so a full season still fits the popup.
+      const n = poolWeekly.weeks.length;
+      const gap = 6;
+      const barW = Math.max(30, Math.min(56, Math.floor((640 - (n - 1) * gap) / n)));
+      const weekLabels = poolWeekly.weeks.map(function(wk){
         const d = wk.deltas[ownerId] || 0;
         const partial = !isCurrentWeekComplete() && wk === poolWeekly.weeks[poolWeekly.weeks.length - 1];
-        return `<span class="detail-weekly-chip${partial ? ' partial' : ''}">Wk ${wk.week}: <b>${fmtDelta(d)}</b></span>`;
+        return `<span class="detail-weekly-label${partial ? ' partial' : ''}">Wk ${wk.week}<b>${fmtDelta(d)}</b></span>`;
       }).join('');
       weeklyHtml = `
         <div class="detail-modal-subhead">Weekly Points</div>
-        <div class="detail-weekly-chart">${buildWeeklyBars(ownerId, poolWeekly, 90)}</div>
-        <div class="detail-weekly-list">${weekChips}</div>
+        <div class="detail-weekly">
+          <div class="detail-weekly-chart">${buildWeeklyBars(ownerId, poolWeekly, 90, {barW: barW, gap: gap})}</div>
+          <div class="detail-weekly-list" style="grid-template-columns:repeat(${n}, ${barW}px); column-gap:${gap}px">${weekLabels}</div>
+        </div>
       `;
     }
 
@@ -3392,7 +3398,9 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // week's pool average, red = fell short, the thin line is the average itself;
   // the current week is faded until it's final. All rows share one height scale,
   // so equal bars mean equal points from owner to owner.
-  function buildWeeklyBars(ownerId, stats, height){
+  // `layout` ({barW, gap}) optionally fixes the bar geometry, so a caller can line other
+  // content up under each bar (the owner detail popup's week labels).
+  function buildWeeklyBars(ownerId, stats, height, layout){
     if(!stats || !stats.weeks.length) return '';
     const n = stats.weeks.length;
     const H = height || 26;
@@ -3402,9 +3410,9 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     // At the default height (no argument passed) this scale is exactly 1, so the
     // existing compact leaderboard chart is completely unchanged.
     const sizeScale = H / 26;
-    const gap = (n > 10 ? 1 : 2) * sizeScale;
+    const gap = layout ? layout.gap : (n > 10 ? 1 : 2) * sizeScale;
     const targetTotalW = 100 * sizeScale;
-    const barW = Math.max(3 * sizeScale, Math.min(14 * sizeScale, Math.floor((targetTotalW - (n - 1) * gap) / n)));
+    const barW = layout ? layout.barW : Math.max(3 * sizeScale, Math.min(14 * sizeScale, Math.floor((targetTotalW - (n - 1) * gap) / n)));
     const W = n * barW + (n - 1) * gap;
     const scale = (H - 4) / stats.maxPts;
     const inProgress = !isCurrentWeekComplete();
