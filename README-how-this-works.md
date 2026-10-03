@@ -30,10 +30,11 @@ JSON endpoints, fetched straight from the visitor's own browser.
 - **To update the dashboard**: replace `public/index.html` in the repo with
   a fresh export, commit to `main` — Cloudflare redeploys automatically,
   usually inside a minute. Nothing else to do.
-- **To set division winners once they're official** (or correct a playoff
-  result ESPN got wrong): update `public/bonuses.json` and push. This is the
-  only way that reaches every visitor — see "Scoring rules" for why the
-  in-page Edit Standings modal doesn't work for this.
+- **To correct a division winner or playoff result ESPN got wrong**: update
+  `public/bonuses.json` and push. Division winners and playoff results are
+  otherwise automatic from ESPN. This is the only way a correction reaches
+  every visitor — see "Scoring rules" for why the in-page Edit Standings
+  modal doesn't work for this.
 
 ### Why the upload page is still on Netlify
 
@@ -160,19 +161,27 @@ bonuses come from two places (`fetchPlayoffAuto()` and
   ("Wild Card"/"Divisional" = playoff win, "Championship" = conference
   champ, "Super Bowl" = SB champ; the Pro Bowl never scores). These are
   real results of finished games, not projections.
-- **Division winner — manual only, via `bonuses.json`.** ESPN doesn't
-  expose a usable "won the division" flag, and a team currently *leading*
-  its division isn't the same as having officially *won* it. So +5 is
-  only awarded for teams listed in `divisionWinners`. The "Division
-  Leader" badges on Team Scores are a live seeding display, never a
-  scoring trigger.
+- **Division winner — automatic from ESPN's clinch codes.** ESPN's
+  standings feed gives each team a `clincher` code: `z` = clinched
+  division, `*` = clinched division and bye, `y` = clinched wild card,
+  `x` = clinched a playoff berth, `e` = eliminated. Only `z` and `*` award
+  the +5, so it lands the moment a title is mathematically clinched, never
+  for merely *leading* a division. If ESPN ever marks two teams in one
+  division, neither counts (bad data shouldn't hand out points). Verified
+  against ESPN's final 2025 standings, which mark exactly one team per
+  division. The "Division Leader" badges on Team Scores are a live seeding
+  display, never a scoring trigger; the "Division Champ" badge's tooltip
+  says whether the title came from ESPN or the commissioner.
+- **Pool Odds and awarded division titles.** Once a title is awarded, that
+  team wins its division in every simulated trial and its +5 isn't added a
+  second time (it's already in the owner's current score).
 
 `bonuses.json` is also an override layer on top of ESPN, with
 field-specific rules:
 
 | Field | Effect |
 |---|---|
-| `divisionWinners` | The *only* source of division-winner bonuses |
+| `divisionWinners` | Replaces ESPN's whole clinched list, but only if non-empty (list all 8 when overriding) |
 | `playoffWins` | Replaces ESPN's count for just the teams listed |
 | `confChamps` | Replaces ESPN's whole list, but only if non-empty |
 | `sbChamp` | Replaces ESPN's champion, but only if non-empty |
@@ -261,9 +270,11 @@ a new domain, check this first.
   forwards `/entry-form.html` and `/entry-form` to the Netlify copy, like
   the upload page. Still to do: confirm Netlify builds it, and turn on email
   notifications for the `pool-entries` form in Netlify's dashboard.
-- **Division winners** need entering into `divisionWinners` in
-  `bonuses.json` once officially decided (expected around January). Playoff
-  wins, conference and SB champs will fill in automatically from ESPN.
+- **Division winners** now come automatically from ESPN's clinch codes
+  (added 2026-10-03). Tested with mocked data against ESPN's real 2025
+  final standings and mid-season mixes, but not yet seen live in a 2026
+  season — worth a glance in December when the first `z` codes appear.
+  Playoff wins, conference and SB champs also fill in automatically.
 - **Possible future additions** raised but not built: showing which
   owners hold each team directly in the Playoff Bracket (beyond the
   click-through popup that already exists), playoff-specific highlights

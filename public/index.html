@@ -1203,7 +1203,7 @@ footer{
       </div>
       <div class="highlights-status" id="highlightsStatus"></div>
       <div class="highlights-board" id="highlightsBoard"></div>
-      <div class="scoring-line"><b>Scoring:</b> +1 per win &middot; +5 division &middot; +3 per playoff win &middot; +5 conference &middot; +10 Super Bowl &mdash; awarded once a result is official</div>
+      <div class="scoring-line"><b>Scoring:</b> +1 per win &middot; +5 division (once clinched) &middot; +3 per playoff win &middot; +5 conference &middot; +10 Super Bowl &mdash; awarded once a result is official</div>
     </section>
 
     <section id="owner-leaderboard-section">
@@ -2094,7 +2094,11 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       let badges = `<span class="badge">${t.stats.wins}-${t.stats.losses}</span>`;
       const live = liveGameInfo[t.team];
       if(live) badges += `<a class="badge live-badge live-${live.state}" href="https://www.espn.co.uk/nfl/game?gameId=${live.gameId}" target="_blank" rel="noopener">\u25CF LIVE Q${live.quarter} ${live.clock} \u00b7 ${live.myScore}-${live.oppScore}</a>`;
-      if(t.stats.divisionWinner) badges += `<span class="badge div-winner">Division Champ</span>`;
+      if(t.stats.divisionWinner){
+        const divTip = divisionWinnerSource === 'espn' ? 'Clinched the division, per ESPN’s official standings (+5)'
+                     : divisionWinnerSource === 'file' ? 'Division title entered by the commissioner (+5)' : 'Division title (+5)';
+        badges += `<span class="badge div-winner" title="${divTip}">Division Champ</span>`;
+      }
       if(t.stats.playoffWins > 0) badges += `<span class="badge">${t.stats.playoffWins} Playoff W</span>`;
       if(t.stats.confChamp) badges += `<span class="badge conf-champ">Conf Champ</span>`;
       if(t.stats.sbChamp) badges += `<span class="badge sb-champ">Super Bowl Champ</span>`;
@@ -3067,8 +3071,12 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     });
   }
 
-  function simulatePoolOdds(projections, teamMetaArg, entriesArg, currentTotalsArg, trials, rng){
+  // awardedDivArg: {team: true} for division titles already decided. Those teams always
+  // win their division in every trial, and their +5 is NOT added again -- it's already
+  // inside currentTotalsArg.
+  function simulatePoolOdds(projections, teamMetaArg, entriesArg, currentTotalsArg, trials, rng, awardedDivArg){
     rng = rng || Math.random;
+    const awardedDiv = awardedDivArg || {};
     trials = trials || 4000;
     const teamsList = Object.keys(teamMetaArg);
   
@@ -3138,7 +3146,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   
       divisionKeys.forEach(key => {
         const teams = shuffle(divisions[key]);
-        const winner = weightedPick(teams, divWeights);
+        const locked = teams.find(t => awardedDiv[t]);
+        const winner = locked || weightedPick(teams, divWeights);
         divisionWinner[winner] = true;
         teamStats[winner].divWins++;
         confSeeds[confOf[winner]].push(winner);
@@ -3182,7 +3191,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         let bonus = 0;
         e.teams.forEach(t => {
           const team = t.team;
-          if(divisionWinner[team]) bonus += 5;
+          if(divisionWinner[team] && !awardedDiv[team]) bonus += 5;
           bonus += (bonusWins[team]||0) * 3;
           if(champs.AFC === team || champs.NFC === team) bonus += 5;
           if(sbWinner === team) bonus += 10;
@@ -3265,11 +3274,15 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
         seedParts.push(t + ':' + (p.winDiv||0).toFixed(4) + ':' + (p.projWins||0).toFixed(2) + ':' + (p.projLosses||0).toFixed(2));
       });
       entries.forEach(function(e){ seedParts.push(e.id + ':' + (currentTotals[e.id]||0)); });
+      const awardedDiv = {};
+      teamNames.forEach(function(t){ if(liveState.stats[t] && liveState.stats[t].divisionWinner) awardedDiv[t] = true; });
+      const awardedList = Object.keys(awardedDiv).sort();
+      if(awardedList.length) seedParts.push('div:' + awardedList.join(','));
       const rng = mulberry32(hashSeed(seedParts.join('|')));
 
       // More trials than the earlier default, since a fixed seed no longer benefits from
       // repeat page loads averaging out any single run's statistical noise.
-      const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 20000, rng);
+      const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 20000, rng, awardedDiv);
 
       function fmtOddsPct(id){
         const pct = (result.probs[id] || 0) * 100;
@@ -3684,6 +3697,8 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             teamPlayoffSeed[t] = parsed[t].playoffSeed; // separate from editable stats -- read-only display info
           });
           liveState.stats = newStats;
+          espnDivisionWinners = divisionWinnersFromClinchers(parsed);
+          applyBonusesToStats();
           liveState.asOf = 'Live-synced ' + new Date().toLocaleString(undefined, {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
           liveState.synced = true;
           saveStats(liveState);
@@ -3717,18 +3732,21 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
             const teamObj = entry.team || {};
             const teamName = teamObj.displayName || teamObj.name || '';
             if(!teamName) return;
-            let wins = 0, losses = 0, playoffSeed = null;
+            let wins = 0, losses = 0, playoffSeed = null, clincher = null;
             (entry.stats || []).forEach(function(st){
               const nm = (st.name || '').toLowerCase();
               if(nm === 'wins') wins = st.value;
               if(nm === 'losses') losses = st.value;
               if(nm === 'playoffseed') playoffSeed = st.value;
+              // ESPN's clinch code: z = clinched division, * = clinched division and bye,
+              // y = clinched wild card, x = clinched playoff berth, e = eliminated.
+              if(nm === 'clincher') clincher = st.displayValue || null;
             });
             const exact = teamNames.indexOf(teamName) !== -1;
             const match = exact ? teamName : teamNames.find(function(t){
               return t.indexOf(teamName) !== -1 || teamName.indexOf(t.split(' ').slice(-1)[0]) !== -1;
             });
-            if(match) out[match] = {wins: wins, losses: losses, playoffSeed: playoffSeed};
+            if(match) out[match] = {wins: wins, losses: losses, playoffSeed: playoffSeed, clincher: clincher};
           });
         }
         if(node.children) node.children.forEach(walk);
@@ -3767,12 +3785,31 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
 
   // ---------- PLAYOFF + BONUS POINTS ----------
   // Playoff wins (3 each), conference champion (+5) and Super Bowl winner (+10) are read
-  // straight from ESPN's postseason results. Division winners (+5) come from bonuses.json,
-  // a small file in the repo that also lets the commissioner override anything automatic.
+  // straight from ESPN's postseason results. Division winners (+5) come from ESPN's
+  // standings clinch codes -- only once a title is mathematically clinched, never just
+  // for leading. bonuses.json, a small file in the repo, can override any of it.
   let playoffPhase = false;   // true while ESPN's scoreboard is showing playoff games
   let bonusFile = null;       // parsed bonuses.json, or null if there isn't one yet
   let playoffAuto = null;     // playoff results read from ESPN: {wins, confChamps, sbChamp}
+  let espnDivisionWinners = null; // teams ESPN marks as division clinchers, or null before the first sync
+  let divisionWinnerSource = null; // 'espn' or 'file' -- where the current division bonuses came from
   let lastBonusRefresh = 0;
+
+  // Teams ESPN marks 'z' (clinched division) or '*' (clinched division and bye). If a
+  // division somehow has more than one, that data is wrong, so none of them count --
+  // better to hold back a bonus than to award one that isn't real.
+  function divisionWinnersFromClinchers(parsed){
+    const byDiv = {};
+    Object.keys(parsed).forEach(function(t){
+      const c = parsed[t].clincher;
+      if(c !== 'z' && c !== '*') return;
+      const key = (teamMeta[t] || []).join(' ');
+      (byDiv[key] = byDiv[key] || []).push(t);
+    });
+    const out = [];
+    Object.keys(byDiv).forEach(function(k){ if(byDiv[k].length === 1) out.push(byDiv[k][0]); });
+    return out;
+  }
 
   function fetchBonusFile(){
     return fetch('bonuses.json', {cache: 'no-store'})
@@ -3815,22 +3852,26 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   }
 
   // bonuses.json (all fields optional):
-  //   divisionWinners: ["Seattle Seahawks", ...]        +5 each
+  //   divisionWinners: ["Seattle Seahawks", ...]        replaces ESPN's clinchers if the list isn't empty
   //   playoffWins:     {"Team": number}                  replaces ESPN's count for that team
   //   confChamps:      ["Team", ...]                     replaces ESPN's if the list isn't empty
   //   sbChamp:         "Team"                            replaces ESPN's if not empty
   function applyBonusesToStats(){
-    if(!bonusFile && !playoffAuto) return; // nothing to apply -- leave the stats as they are
     const f = bonusFile || {};
+    const divFromFile = (Array.isArray(f.divisionWinners) && f.divisionWinners.length) ? f.divisionWinners : null;
+    // null = nothing known yet from either source, so leave division flags as they are
+    const divList = divFromFile || espnDivisionWinners || (bonusFile ? [] : null);
+    const applyPlayoff = !!(bonusFile || playoffAuto);
+    if(!divList && !applyPlayoff) return; // nothing to apply -- leave the stats as they are
+    divisionWinnerSource = divFromFile ? 'file' : (espnDivisionWinners ? 'espn' : null);
     const auto = playoffAuto || {wins: {}, confChamps: {}, sbChamp: null};
-    const divisionSet = {};
-    (Array.isArray(f.divisionWinners) ? f.divisionWinners : []).forEach(function(t){ divisionSet[t] = true; });
     const confList = (Array.isArray(f.confChamps) && f.confChamps.length) ? f.confChamps : null;
     const sbFromFile = (typeof f.sbChamp === 'string' && f.sbChamp) ? f.sbChamp : null;
     teamNames.forEach(function(t){
       const s = liveState.stats[t];
       if(!s) return;
-      s.divisionWinner = !!divisionSet[t];
+      if(divList) s.divisionWinner = divList.indexOf(t) !== -1;
+      if(!applyPlayoff) return;
       s.playoffWins = (f.playoffWins && typeof f.playoffWins[t] === 'number') ? f.playoffWins[t] : (auto.wins[t] || 0);
       s.confChamp = confList ? confList.indexOf(t) !== -1 : !!auto.confChamps[t];
       s.sbChamp = sbFromFile ? sbFromFile === t : auto.sbChamp === t;

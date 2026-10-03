@@ -19,9 +19,9 @@ full JS app (one big IIFE in a `<script>` tag) live in this one file, plus a
 `<script id="data-json">` block holding the baked season/entries data. There
 is no build step, no bundler, no framework. Edit this file directly.
 
-`public/bonuses.json` is a small, hand-maintained file: the only source of
-division winners, plus an override for ESPN's auto-detected playoff results — see the
-"Scoring" section in the README before touching it.
+`public/bonuses.json` is a small, hand-maintained override file for ESPN's
+auto-detected division winners and playoff results — see the "Scoring"
+section in the README before touching it.
 
 `public/upload.html` looks stale (Cloudflare redirects `/upload` to
 Netlify), but Netlify still builds that page from this repo via
@@ -56,9 +56,12 @@ simulation" out loud). Don't quietly blur that line when adding features.
 - **Scoring**: `wins*1 + divisionWinner*5 + playoffWins*3 + confChamp*5 +
   sbChamp*10`. Playoff wins / conf champ / SB champ are read automatically
   from ESPN's *completed* postseason games (`fetchPlayoffAuto()`);
-  `bonuses.json` can override them. Division winners come only from
-  `bonuses.json` — never auto-awarded just
-  because a team currently looks like a division leader. Edit Standings
+  `bonuses.json` can override them. Division winners come from ESPN's
+  standings `clincher` code (`z` or `*` = clinched division), so +5 lands
+  only once a title is mathematically clinched — never just because a team
+  currently leads its division. A non-empty `divisionWinners` in
+  `bonuses.json` replaces ESPN's list. Pool Odds locks already-awarded
+  division winners in and doesn't re-add their +5. Edit Standings
   (`#admin`) only saves to that browser's localStorage and gets overwritten
   by the next bonus refresh, so it's not a real way to award bonuses.
 - **Live data**: ESPN's undocumented public JSON endpoints (scoreboard,
