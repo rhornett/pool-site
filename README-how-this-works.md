@@ -23,14 +23,16 @@ JSON endpoints, fetched straight from the visitor's own browser.
   public/index.html     → the entire dashboard: HTML + CSS + JS + baked data, all in one file
   public/bonuses.json   → admin-maintained override file for division/playoff/SB winners
   public/_redirects     → routes /upload.html and /upload to the Netlify-hosted upload page
-  public/entry-form.html → pool entry form (built, not yet live — see Pending below)
+  public/upload.html    → source of the live upload page that Netlify serves (see below), NOT dead weight
+  netlify.toml, netlify/functions/generate-upload-url.js, package.json → the Netlify side of the upload flow
   ```
 - **To update the dashboard**: replace `public/index.html` in the repo with
   a fresh export, commit to `main` — Cloudflare redeploys automatically,
   usually inside a minute. Nothing else to do.
-- **To set division winners / playoff bonuses once they're official**:
-  update `public/bonuses.json` and push, or use the in-page Edit Standings
-  modal behind `#admin` in the URL.
+- **To set division winners once they're official** (or correct a playoff
+  result ESPN got wrong): update `public/bonuses.json` and push. This is the
+  only way that reaches every visitor — see "Scoring rules" for why the
+  in-page Edit Standings modal doesn't work for this.
 
 ### Why the upload page is still on Netlify
 
@@ -39,7 +41,14 @@ upload page (`upload.html`, with its presigned-URL-to-Cloudflare-R2 flow)
 was left running on its original Netlify deployment rather than migrated.
 `public/_redirects` on the Cloudflare side forwards `/upload.html` and
 `/upload` to the live Netlify URL, so from a visitor's point of view it's
-all one site. See the original Netlify/R2 notes further down for how that
+all one site.
+
+Netlify appears to still build from this same repo (`netlify.toml`
+publishes `public/` and the functions in `netlify/functions/`). As of
+2026-10-03 the live Netlify upload page was identical to
+`public/upload.html` apart from Netlify's own build-time form rewriting.
+So `public/upload.html` is the real source for that page — don't delete it
+as a "stale copy" even though Cloudflare redirects away from it. See the original Netlify/R2 notes further down for how that
 piece works if it ever needs touching.
 
 ## The dashboard, tab by tab
@@ -139,15 +148,45 @@ points = wins*1
          + (sbChamp ? 10 : 0)
 ```
 
-Regular-season wins/losses sync live and automatically from ESPN. The bonus
-flags (division winner, playoff wins, conference champ, Super Bowl champ)
-are **never** inferred automatically from current standings — they only
-count once manually checked off via the Edit Standings modal (`#admin` in
-the URL) or set in `public/bonuses.json`. This is intentional: a team
-currently *leading* its division isn't the same as having officially *won*
-it, and the dashboard is careful not to conflate the two anywhere, including
-in the "Division Leader" badges on Team Scores (which are explicitly a live
-seeding display, not a scoring trigger).
+Regular-season wins/losses sync live and automatically from ESPN. The
+bonuses come from two places (`fetchPlayoffAuto()` and
+`applyBonusesToStats()` in `index.html`):
+
+- **Playoff wins, conference champ, Super Bowl champ — automatic from
+  ESPN.** From week 17 onward (or once ESPN's scoreboard shows playoff
+  games), the page reads ESPN's postseason scoreboard and counts every
+  *completed* game, identifying the round from ESPN's headline text
+  ("Wild Card"/"Divisional" = playoff win, "Championship" = conference
+  champ, "Super Bowl" = SB champ; the Pro Bowl never scores). These are
+  real results of finished games, not projections.
+- **Division winner — manual only, via `bonuses.json`.** ESPN doesn't
+  expose a usable "won the division" flag, and a team currently *leading*
+  its division isn't the same as having officially *won* it. So +5 is
+  only awarded for teams listed in `divisionWinners`. The "Division
+  Leader" badges on Team Scores are a live seeding display, never a
+  scoring trigger.
+
+`bonuses.json` is also an override layer on top of ESPN, with
+field-specific rules:
+
+| Field | Effect |
+|---|---|
+| `divisionWinners` | The *only* source of division-winner bonuses |
+| `playoffWins` | Replaces ESPN's count for just the teams listed |
+| `confChamps` | Replaces ESPN's whole list, but only if non-empty |
+| `sbChamp` | Replaces ESPN's champion, but only if non-empty |
+
+**Edit Standings (`#admin`) does not set bonuses for anyone.** It saves to
+the commissioner's own browser `localStorage`, so no other visitor ever
+sees those edits — and even in that browser, every live poll (about every
+two minutes) re-applies `bonuses.json` + ESPN and overwrites all four bonus
+flags. Treat it as a local what-if tool; use `bonuses.json` for anything
+real.
+
+Not yet verified against real data: the postseason fetch requests
+`dates=<season_year>` from ESPN, and there's no real 2026 postseason data
+to confirm against until January. A mocked-fetch Playwright test of the
+round matching and override rules would be worth doing before then.
 
 ## How the file upload works (unchanged from original Netlify build)
 
@@ -211,11 +250,13 @@ a new domain, check this first.
 
 ## Pending items (not yet done, as of this writing)
 
-- **Entry form** (`public/entry-form.html`) is built but not yet linked
-  live — waiting on the Netlify side being usable again to finish wiring
-  it up, since it was built alongside the upload page.
-- **Division winners** need entering into `bonuses.json` once officially
-  decided (expected around January).
+- **Entry form**: a standalone `entry-form.html` was drafted in a chat
+  session but has **never been committed** to this repo (or to git history
+  anywhere). It isn't in `public/`. It needs adding to the repo before it
+  can be wired up alongside the upload page.
+- **Division winners** need entering into `divisionWinners` in
+  `bonuses.json` once officially decided (expected around January). Playoff
+  wins, conference and SB champs will fill in automatically from ESPN.
 - **Possible future additions** raised but not built: showing which
   owners hold each team directly in the Playoff Bracket (beyond the
   click-through popup that already exists), playoff-specific highlights
