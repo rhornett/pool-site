@@ -362,7 +362,6 @@ section[id]{scroll-margin-top:20px;}
 .recap-card{
   width:100%;
   max-width:400px;
-  aspect-ratio: 1080 / 1350;
   background: linear-gradient(180deg, #16253b 0%, #0f1b2d 100%);
   border:1px solid var(--line);
   border-radius:14px;
@@ -1155,8 +1154,8 @@ footer{
       <a href="#pool-odds-section">Pool Odds</a>
       <a href="#predicted-standings-section">Predicted Standings</a>
       <a href="#highlights-section">Highlights</a>
-      <a href="#weekly-recap-section">Weekly Recap</a>
       <a href="#owner-leaderboard-section">Leaderboard</a>
+      <a href="#weekly-recap-section">Weekly Recap</a>
     </div>
 
     <div class="live-status-bar" id="live-status-section">
@@ -1196,18 +1195,6 @@ footer{
       <div class="scoring-line"><b>Scoring:</b> +1 per win &middot; +5 division &middot; +3 per playoff win &middot; +5 conference &middot; +10 Super Bowl &mdash; awarded once a result is official</div>
     </section>
 
-    <section id="weekly-recap-section">
-      <div class="sec-head">
-        <h2>Weekly Recap</h2>
-        <div class="note">A shareable summary of the week &mdash; download it and drop it in the group chat</div>
-      </div>
-      <div class="recap-wrap">
-        <div class="recap-card" id="recapCard"></div>
-        <button class="live-btn primary recap-download-btn" id="recapDownloadBtn">Download Image</button>
-      </div>
-      <canvas id="recapCanvas" width="1080" height="1350" style="display:none;"></canvas>
-    </section>
-
     <section id="owner-leaderboard-section">
       <div class="sec-head">
         <h2>Owner Leaderboard</h2>
@@ -1219,6 +1206,18 @@ footer{
       </div>
       <div class="weekbars-legend">Bars beside each score show points per week: <span class="wk-swatch up"></span>beat the pool average &nbsp;<span class="wk-swatch down"></span>below it &middot; the thin line marks the average &middot; a faded bar is a week still in progress</div>
       <div id="ownerLeaderboard"></div>
+    </section>
+
+    <section id="weekly-recap-section">
+      <div class="sec-head">
+        <h2>Weekly Recap</h2>
+        <div class="note">A shareable summary of the week &mdash; download it and drop it in the group chat</div>
+      </div>
+      <div class="recap-wrap">
+        <div class="recap-card" id="recapCard"></div>
+        <button class="live-btn primary recap-download-btn" id="recapDownloadBtn">Download Image</button>
+      </div>
+      <canvas id="recapCanvas" width="1080" height="1350" style="display:none;"></canvas>
     </section>
 
   </div><!-- /tab-live -->
@@ -2871,8 +2870,40 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     const canvas = document.getElementById('recapCanvas');
     if(!canvas) return;
     const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    const PAD = 70;
+    const W = 1080, PAD = 70;
+    const crestSize = 110;
+    const textX = PAD + crestSize + 28;
+    const headerMaxWidth = W - textX - PAD;
+    const innerX = PAD + 28;
+    const boxMaxWidth = W - PAD * 2 - 56; // inner text width within a stat box
+    const NAME_FONT = '400 36px Anton, Arial, sans-serif';
+    const NAME_LINE_H = 42;
+    const HEADER_FONT = '600 20px Barlow, Arial, sans-serif';
+    const HEADER_LINE_H = 24;
+    const gap = 20;
+
+    // Pass 1: measure everything with real wrapping BEFORE drawing anything, so the
+    // canvas can be sized to actually fit -- a long tied-name list ("Alice, Bob (\u00d72)
+    // +3 more") can wrap to 2+ lines, and the card needs to grow for that rather than
+    // let the last box run off the bottom.
+    ctx.font = HEADER_FONT;
+    const headerLines = wrapLines(ctx, "RIKKI HORNETT NFL OWNER'S POOL", headerMaxWidth);
+    const headerH = Math.max(crestSize, headerLines.length * HEADER_LINE_H + 46) + 50;
+
+    const stats = recapStats();
+    ctx.font = NAME_FONT;
+    const measured = stats.map(function(s){
+      const nameLines = wrapLines(ctx, s.name, boxMaxWidth);
+      const boxH = 34 + nameLines.length * NAME_LINE_H + 44;
+      return {s: s, nameLines: nameLines, boxH: boxH};
+    });
+    const stackH = measured.reduce(function(sum, m){ return sum + m.boxH; }, 0) + Math.max(0, measured.length - 1) * gap;
+    const MIN_STACK_AREA = 420; // keeps short recaps from looking cramped against the footer
+    const footerH = 90;
+    const H = Math.round(PAD + headerH + Math.max(stackH, MIN_STACK_AREA) + footerH + PAD);
+
+    canvas.width = W;
+    canvas.height = H;
 
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#16253b');
@@ -2881,49 +2912,41 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     ctx.fillRect(0, 0, W, H);
 
     let y = PAD;
-    const crestSize = 110;
+    ctx.textBaseline = 'top';
     const crestImg = document.getElementById('crestImg');
     if(crestImg && crestImg.complete && crestImg.naturalWidth > 0){
       ctx.drawImage(crestImg, PAD, y, crestSize, crestSize);
     }
-    const textX = PAD + crestSize + 28;
-    ctx.textBaseline = 'top';
     ctx.fillStyle = '#f0c869';
-    ctx.font = '600 20px Barlow, Arial, sans-serif';
-    wrapText(ctx, "RIKKI HORNETT NFL OWNER'S POOL", textX, y + 14, W - textX - PAD, 24);
+    ctx.font = HEADER_FONT;
+    drawLines(ctx, headerLines, textX, y + 14, HEADER_LINE_H);
     ctx.fillStyle = '#f3ecdd';
     ctx.font = '400 46px Anton, Arial, sans-serif';
-    ctx.fillText(recapWeekLabel().toUpperCase(), textX, y + 48);
-    y += crestSize + 50;
+    ctx.fillText(recapWeekLabel().toUpperCase(), textX, y + 14 + headerLines.length * HEADER_LINE_H + 10);
+    y += headerH;
 
-    const stats = recapStats();
-    // A fixed box size that comfortably fits the three lines of text, rather than
-    // stretching to fill whatever space is left -- with fewer than 4 stats (e.g. no
-    // rank movement yet to report), that stretching left boxes looking sparse and
-    // mostly empty. The whole stack is vertically centered in the remaining space
-    // instead, so 2 stats look as intentional as 4.
-    const boxH = 150, gap = 20;
-    const stackH = stats.length * boxH + Math.max(0, stats.length - 1) * gap;
-    const availableH = H - y - 90;
+    // Center the stack in whatever space is left above the footer, same as before,
+    // now using each box's real measured height instead of a fixed guess.
+    const availableH = H - y - footerH;
     let by = y + Math.max(0, (availableH - stackH) / 2);
-    stats.forEach(function(s){
+    measured.forEach(function(m){
+      const s = m.s, boxH = m.boxH;
       ctx.fillStyle = 'rgba(255,255,255,0.04)';
       ctx.fillRect(PAD, by, W - PAD * 2, boxH);
       ctx.fillStyle = '#f0c869';
       ctx.fillRect(PAD, by, 6, boxH);
 
-      const innerX = PAD + 28;
       ctx.fillStyle = 'rgba(243,236,221,0.55)';
-      ctx.font = '600 20px Barlow, Arial, sans-serif';
+      ctx.font = HEADER_FONT;
       ctx.fillText(s.icon + '  ' + s.label.toUpperCase(), innerX, by + 26);
 
       ctx.fillStyle = '#f3ecdd';
-      ctx.font = '400 36px Anton, Arial, sans-serif';
-      ctx.fillText(s.name, innerX, by + 62);
+      ctx.font = NAME_FONT;
+      drawLines(ctx, m.nameLines, innerX, by + 62, NAME_LINE_H);
 
       ctx.fillStyle = '#f0c869';
       ctx.font = '400 20px Barlow, Arial, sans-serif';
-      ctx.fillText(s.value, innerX, by + 110);
+      ctx.fillText(s.value, innerX, by + 62 + m.nameLines.length * NAME_LINE_H + 12);
 
       by += boxH + gap;
     });
@@ -2935,21 +2958,28 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
     ctx.textAlign = 'left';
   }
 
-  function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  // Splits text into lines that fit maxWidth under whatever font is CURRENTLY set on
+  // ctx -- caller sets ctx.font before calling. Used both to measure how tall a block
+  // of text will be before anything is drawn, and to actually draw it line by line,
+  // so the two can never disagree with each other.
+  function wrapLines(ctx, text, maxWidth){
     const words = text.split(' ');
+    const lines = [];
     let line = '';
-    let lineY = y;
     for(let i = 0; i < words.length; i++){
       const testLine = line + words[i] + ' ';
       if(ctx.measureText(testLine).width > maxWidth && line !== ''){
-        ctx.fillText(line, x, lineY);
+        lines.push(line.trim());
         line = words[i] + ' ';
-        lineY += lineHeight;
       } else {
         line = testLine;
       }
     }
-    ctx.fillText(line, x, lineY);
+    lines.push(line.trim());
+    return lines;
+  }
+  function drawLines(ctx, lines, x, y, lineHeight){
+    lines.forEach(function(line, i){ ctx.fillText(line, x, y + i * lineHeight); });
   }
 
   // ---------- POOL ODDS (live playoff simulation) ----------
