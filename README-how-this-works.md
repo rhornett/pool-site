@@ -126,6 +126,13 @@ championships, the Super Bowl) is simulated 20,000 times using each team's
 projected strength as the engine. This is described as "our simulation" in
 the page copy, deliberately distinct from the real ESPN inputs feeding it.
 
+Every owner's win chance and **predicted finish** (their position when the
+whole field is ordered by average simulated finish, the same order as
+Predicted Final Standings; ties shown as "3rd=") also appear on their
+leaderboard row and in their popup, labeled as simulated. Odds never show
+0%: an owner who never wins in 20,000 trials shows "<0.1%", since the
+simulation can't prove they can't win.
+
 The simulation is **seeded deterministically** — a hash of the real current
 inputs (every team's projection data, every owner's current score) feeds a
 seeded PRNG, so reloading the page with nothing actually changed gives the

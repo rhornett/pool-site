@@ -238,6 +238,8 @@ section[id]{scroll-margin-top:20px;}
   font-size:12.5px;
   color: rgba(243,236,221,0.55);
 }
+.owner-odds{font-size:12.5px; color: rgba(243,236,221,0.55); margin-top:4px;}
+.owner-odds b{color: rgba(243,236,221,0.85); font-weight:700;}
 .rank-change{
   font-size:12px;
   font-weight:700;
@@ -790,6 +792,17 @@ section[id]{scroll-margin-top:20px;}
 .detail-modal-title{font-family:'Anton', sans-serif; font-size:22px; color:var(--cream);}
 .detail-modal-sub{font-size:13px; color: rgba(243,236,221,0.55); margin-top:2px;}
 .detail-modal-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+.detail-odds{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px;}
+.detail-odds-stat{
+  flex:1 1 140px;
+  background: rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:6px;
+  padding:10px 14px;
+}
+.detail-odds-val{font-family:'Anton', sans-serif; font-size:24px; color: var(--gold-bright);}
+.detail-odds-lbl{font-size:12px; color: rgba(243,236,221,0.55); margin-top:2px;}
+.detail-odds-note{font-size:11.5px; color: rgba(243,236,221,0.45); margin-bottom:20px;}
 .detail-weekly{overflow-x:auto; margin-bottom:20px;}
 .detail-weekly-chart{line-height:0; margin-bottom:6px;}
 .detail-weekly-chart .owner-weekbars{max-width:none;} /* keep bars at label-column width; .detail-weekly scrolls instead */
@@ -1215,7 +1228,7 @@ footer{
         <input type="text" id="ownerSearchBox" placeholder="Search owners…">
         <div class="explorer-count" id="ownerSearchCount"></div>
       </div>
-      <div class="weekbars-legend">Bars beside each score show points per week: <span class="wk-swatch up"></span>beat the pool average &nbsp;<span class="wk-swatch down"></span>below it &middot; the thin line marks the average &middot; a faded bar is a week still in progress</div>
+      <div class="weekbars-legend">Bars beside each score show points per week: <span class="wk-swatch up"></span>beat the pool average &nbsp;<span class="wk-swatch down"></span>below it &middot; the thin line marks the average &middot; a faded bar is a week still in progress<br>&#x1F3B2; Win odds and predicted finish come from our simulation of the rest of the season (see Pool Odds)</div>
       <div id="ownerLeaderboard"></div>
     </section>
 
@@ -1949,6 +1962,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           <div class="detail-modal-sub">${total} pts total${payout ? ' \u00b7 ' + fmtMoney(payout) + ' payout' : ''} \u00b7 ${entry.teams.length} teams</div>
         </div>
       </div>
+      ${lastOwnerOdds ? `
+        <div class="detail-odds">
+          <div class="detail-odds-stat"><div class="detail-odds-val">${lastOwnerOdds.pct[ownerId]}%</div><div class="detail-odds-lbl">Chance of winning the pool</div></div>
+          <div class="detail-odds-stat"><div class="detail-odds-val">${lastOwnerOdds.finish[ownerId]}</div><div class="detail-odds-lbl">Predicted finish</div></div>
+        </div>
+        <div class="detail-odds-note">From our simulation of the rest of the season, using ESPN’s live division odds — see Pool Odds.</div>
+      ` : ''}
       ${weeklyHtml}
       <div class="detail-modal-subhead">Teams</div>
       <div class="detail-modal-chips">${chips}</div>
@@ -2434,6 +2454,7 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
           <div class="owner-info">
             <div class="owner-name">${ownerLinkHtml(o.id, o.name)}</div>
             ${metaHtml}
+            ${lastOwnerOdds ? `<div class="owner-odds" title="From our simulation of the rest of the season (see Pool Odds)">🎲 <b>${lastOwnerOdds.pct[o.id]}%</b> to win &middot; predicted <b>${lastOwnerOdds.finish[o.id]}</b></div>` : ''}
           </div>
           ${lastPayouts[o.id] ? `<div class="owner-payout">${fmtMoney(lastPayouts[o.id])}</div>` : ''}
           <div class="owner-score-block">
@@ -3032,6 +3053,35 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
   // as such wherever it's shown.
   let lastPoolOddsRefresh = 0;
   let lastPoolFavorite = null; // {name, pct} -- set once Pool Odds has actually run
+  // Every owner's simulated odds, for the leaderboard rows and owner popup:
+  // {pct: {id: '12'}, finish: {id: '3rd'}} -- null until Pool Odds has run.
+  let lastOwnerOdds = null;
+
+  // Shared by the Pool Odds cards, leaderboard and popup so they always agree.
+  // Never shows 0%: never winning in 20,000 simulated seasons doesn't prove an owner can't win.
+  function fmtOddsPct(p){
+    const pct = (p || 0) * 100;
+    return pct >= 9.95 ? pct.toFixed(0) : (pct >= 0.1 ? pct.toFixed(1) : '<0.1');
+  }
+  function ordinal(n){
+    const v = n % 100;
+    return n + ((v >= 11 && v <= 13) ? 'th' : (['th','st','nd','rd'][n % 10] || 'th'));
+  }
+  // Predicted finish = position in the field when everyone is ordered by average
+  // simulated finish (the same order as Predicted Final Standings). Owners with the
+  // same average share a position, shown as e.g. "3rd=".
+  function predictedFinishes(avgRanks, ids){
+    const sorted = ids.slice().sort(function(a,b){ return (avgRanks[a]||Infinity) - (avgRanks[b]||Infinity); });
+    const pos = {}, count = {};
+    sorted.forEach(function(id, i){
+      const prev = sorted[i-1];
+      pos[id] = (i > 0 && Math.abs(avgRanks[id] - avgRanks[prev]) < 1e-9) ? pos[prev] : i + 1;
+      count[pos[id]] = (count[pos[id]] || 0) + 1;
+    });
+    const out = {};
+    ids.forEach(function(id){ out[id] = ordinal(pos[id]) + (count[pos[id]] > 1 ? '=' : ''); });
+    return out;
+  }
 
   // ESPN's numeric team IDs, permanent and never change year to year. Confirmed live
   // against the same standings feed the "Refresh Live Sync" button already uses
@@ -3284,10 +3334,13 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       // repeat page loads averaging out any single run's statistical noise.
       const result = simulatePoolOdds(projections, teamMeta, entries, currentTotals, 20000, rng, awardedDiv);
 
-      function fmtOddsPct(id){
-        const pct = (result.probs[id] || 0) * 100;
-        return pct >= 10 ? pct.toFixed(0) : (pct >= 1 ? pct.toFixed(1) : (pct > 0 ? '<1' : '0'));
-      }
+      function fmtOwnerPct(id){ return fmtOddsPct(result.probs[id]); }
+
+      const ownerIds = entries.map(function(e){ return e.id; });
+      const pctById = {};
+      ownerIds.forEach(function(id){ pctById[id] = fmtOwnerPct(id); });
+      lastOwnerOdds = {pct: pctById, finish: predictedFinishes(result.avgRanks, ownerIds)};
+      renderOwnerLeaderboardList(ownerSearchTerm);
 
       const ranked = entries.slice().sort(function(a,b){ return (result.probs[b.id]||0) - (result.probs[a.id]||0); });
       const top5 = ranked.slice(0, 5);
@@ -3304,17 +3357,17 @@ document.getElementById('crestImg').src = "data:image/jpeg;base64,/9j/4AAQSkZJRg
       const favPctEl = document.getElementById('scoreboardFavoritePct');
       const favLblEl = document.getElementById('scoreboardFavoriteLbl');
       if(favPctEl && top5.length){
-        favPctEl.textContent = fmtOddsPct(top5[0].id) + '%';
+        favPctEl.textContent = fmtOwnerPct(top5[0].id) + '%';
         if(favLblEl) favLblEl.textContent = 'Favorite: ' + top5[0].name;
       }
-      if(top5.length) lastPoolFavorite = {name: top5[0].name, pct: fmtOddsPct(top5[0].id) + '%'};
+      if(top5.length) lastPoolFavorite = {name: top5[0].name, pct: fmtOwnerPct(top5[0].id) + '%'};
 
       board.innerHTML = top5.map(function(e){
         const predicted = Math.round(result.predictedScores[e.id] || 0);
         return '<div class="highlight-card odds-card">' +
           '<div class="highlight-head"><span class="highlight-icon">\uD83C\uDFC6</span><span class="highlight-label">Pool win odds</span></div>' +
           '<div class="highlight-names">' + ownerLinkHtml(e.id, e.name) + '</div>' +
-          '<div class="highlight-detail odds-pct">' + fmtOddsPct(e.id) + '%</div>' +
+          '<div class="highlight-detail odds-pct">' + fmtOwnerPct(e.id) + '%</div>' +
           '<div class="odds-predicted">Predicted final score: ' + predicted + '</div>' +
         '</div>';
       }).join('');
